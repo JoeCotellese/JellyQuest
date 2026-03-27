@@ -69,6 +69,9 @@ dependencies {
   implementation(libs.meta.spatial.sdk.isdk)
   implementation(libs.meta.spatial.sdk.uiset)
 
+  // VLC
+  implementation(libs.libvlc.all)
+
   // Debug tools
   implementation(libs.meta.spatial.sdk.castinputforward)
   implementation(libs.meta.spatial.sdk.hotreload)

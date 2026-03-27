@@ -1,7 +1,11 @@
 package com.quest.helloworld
 
+import android.content.Context
+import android.net.wifi.WifiManager
 import android.os.Bundle
+import android.util.Log
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import com.meta.spatial.castinputforward.CastInputForwardFeature
 import com.meta.spatial.compose.ComposeFeature
@@ -27,6 +31,9 @@ import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.UIPanelSettings
 import com.meta.spatial.toolkit.createPanelEntity
 import com.meta.spatial.vr.VRFeature
+import com.quest.helloworld.streaming.DlnaDiscovery
+import com.quest.helloworld.streaming.DlnaSource
+import org.videolan.libvlc.LibVLC
 
 data class ScreenPreset(val label: String, val widthM: Float, val heightM: Float, val minDistanceIndex: Int = 0)
 data class DistancePreset(val label: String, val distanceM: Float)
@@ -67,11 +74,23 @@ val HEIGHTS = listOf(
 
 class HelloWorldActivity : AppSystemActivity() {
 
+  companion object {
+    private const val TAG = "VirtualMonitor"
+  }
+
   val currentSizeIndex = mutableIntStateOf(2)      // 65" TV
   val currentDistanceIndex = mutableIntStateOf(1)  // Living Room
   val currentHeightIndex = mutableIntStateOf(2)    // Eye Level
 
   private var panelEntity: Entity? = null
+  private var browsePanelEntity: Entity? = null
+  val browsePanelVisible = mutableStateOf(false)
+
+  // VLC / DLNA
+  lateinit var libVLC: LibVLC
+  lateinit var dlnaSource: DlnaSource
+  lateinit var dlnaDiscovery: DlnaDiscovery
+  private var multicastLock: WifiManager.MulticastLock? = null
 
   // Anchor: the user's position and facing direction, captured once at startup.
   // All panel placement is relative to this fixed point.
@@ -98,10 +117,35 @@ class HelloWorldActivity : AppSystemActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    // Acquire multicast lock so UPnP/SSDP discovery packets aren't dropped
+    try {
+      val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+      multicastLock = wifiManager.createMulticastLock("dlna_discovery").apply {
+        setReferenceCounted(true)
+        acquire()
+      }
+      Log.i(TAG, "MulticastLock acquired: ${multicastLock?.isHeld}")
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to acquire MulticastLock", e)
+    }
+
+    libVLC = LibVLC(this, arrayListOf("--no-drop-late-frames", "--no-skip-frames"))
+    dlnaSource = DlnaSource(libVLC)
+    dlnaDiscovery = DlnaDiscovery(libVLC)
+    Log.i(TAG, "LibVLC and DLNA initialized")
+  }
+
+  override fun onDestroy() {
+    dlnaSource.disconnect()
+    dlnaDiscovery.stop()
+    libVLC.release()
+    multicastLock?.let { if (it.isHeld) it.release() }
+    super.onDestroy()
   }
 
   override fun onSceneReady() {
     super.onSceneReady()
+    Log.i(TAG, "onSceneReady called")
 
     scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
 
@@ -153,6 +197,19 @@ class HelloWorldActivity : AppSystemActivity() {
                 respawnPanel()
               }
             },
+            onBrowseToggle = {
+              browsePanelVisible.value = !browsePanelVisible.value
+              if (browsePanelVisible.value) {
+                dlnaDiscovery.start()
+                spawnBrowsePanel()
+              } else {
+                browsePanelEntity?.destroy()
+                browsePanelEntity = null
+              }
+            },
+            onPlayPauseToggle = {
+              dlnaSource.togglePlayPause()
+            },
         )
     )
   }
@@ -166,7 +223,10 @@ class HelloWorldActivity : AppSystemActivity() {
             ?.getComponent<Transform>()
             ?.transform
 
-    if (headPose == null || headPose == Pose()) return false
+    if (headPose == null || headPose == Pose()) {
+      Log.d(TAG, "captureAnchor: headPose=${headPose?.t} (null=${headPose == null}, default=${headPose == Pose()})")
+      return false
+    }
 
     anchorPosition = Vector3(headPose.t.x, 0f, headPose.t.z)
     // SDK: +Z is forward. Pose.forward() = headPose.q * Vector3(0,0,1)
@@ -175,6 +235,7 @@ class HelloWorldActivity : AppSystemActivity() {
     anchorForward = forward.normalize()
     anchorRotation = Quaternion.lookRotationAroundY(anchorForward)
     anchorCaptured = true
+    Log.i(TAG, "Anchor captured: pos=$anchorPosition fwd=$anchorForward rot=$anchorRotation headPose=${headPose.t}")
     return true
   }
 
@@ -190,6 +251,7 @@ class HelloWorldActivity : AppSystemActivity() {
     val position = anchorPosition + anchorForward * distance.distanceM
     position.y = height.heightM
 
+    Log.i(TAG, "Spawning panel at pos=$position rot=$anchorRotation dist=${distance.label} height=${height.label}")
     panelEntity =
         Entity.createPanelEntity(
             R.id.hello_panel,
@@ -203,14 +265,33 @@ class HelloWorldActivity : AppSystemActivity() {
     spawnPanel()
   }
 
+  private fun spawnBrowsePanel() {
+    browsePanelEntity?.destroy()
+    val distance = DISTANCES[currentDistanceIndex.intValue]
+    val height = HEIGHTS[currentHeightIndex.intValue]
+
+    // Place browse panel to the right of the main panel
+    val rightDir = Vector3(-anchorForward.z, 0f, anchorForward.x).normalize()
+    val position = anchorPosition + anchorForward * (distance.distanceM * 0.7f) + rightDir * 1.2f
+    position.y = height.heightM
+
+    browsePanelEntity =
+        Entity.createPanelEntity(
+            R.id.browse_panel,
+            Transform(Pose(position, anchorRotation)),
+        )
+  }
+
   override fun registerPanels(): List<PanelRegistration> {
     return listOf(
+        // Main monitor panel
         ComposeViewPanelRegistration(
             R.id.hello_panel,
             composeViewCreator = { _, ctx ->
               ComposeView(ctx).apply {
                 setContent {
-                  HelloPanel(
+                  MonitorPanel(
+                      streamSource = dlnaSource,
                       sizeIndex = currentSizeIndex,
                       distanceIndex = currentDistanceIndex,
                       heightIndex = currentHeightIndex,
@@ -231,7 +312,34 @@ class HelloWorldActivity : AppSystemActivity() {
                   display = DpPerMeterDisplayOptions(dpPerMeter),
               )
             },
-        )
+        ),
+        // DLNA browse panel (shown/hidden via A button)
+        ComposeViewPanelRegistration(
+            R.id.browse_panel,
+            composeViewCreator = { _, ctx ->
+              ComposeView(ctx).apply {
+                setContent {
+                  BrowsePanel(
+                      discovery = dlnaDiscovery,
+                      onMediaSelected = { uri ->
+                        dlnaSource.connect(uri)
+                        // Hide browse panel after selecting media
+                        browsePanelVisible.value = false
+                        browsePanelEntity?.destroy()
+                        browsePanelEntity = null
+                      },
+                  )
+                }
+              }
+            },
+            settingsCreator = {
+              UIPanelSettings(
+                  shape = QuadShapeOptions(width = 0.8f, height = 1.0f),
+                  style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
+                  display = DpPerMeterDisplayOptions(),
+              )
+            },
+        ),
     )
   }
 }
