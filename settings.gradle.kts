@@ -14,6 +14,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "HelloWorld"
+rootProject.name = "VirtualMonitorPOC"
 
 include(":app")
