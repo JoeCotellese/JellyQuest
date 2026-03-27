@@ -9,6 +9,7 @@ import com.meta.spatial.toolkit.Controller
 class ScreenSizeControlSystem(
     private val onSizeChange: (Int) -> Unit,
     private val onDistanceChange: (Int) -> Unit,
+    private val onHeightChange: (Int) -> Unit,
 ) : SystemBase() {
 
   override fun execute() {
@@ -20,8 +21,9 @@ class ScreenSizeControlSystem(
 
     val avatarBody = localPlayerAvatar.getComponent<AvatarBody>()
     val rightController = avatarBody.rightHand.tryGetComponent<Controller>() ?: return
+    val leftController = avatarBody.leftHand.tryGetComponent<Controller>()
 
-    // Thumbstick left/right → cycle screen size
+    // Right thumbstick left/right → cycle screen size
     if (rightController.getPressed(ButtonBits.ButtonThumbRL)) {
       onSizeChange(-1)
     }
@@ -29,12 +31,22 @@ class ScreenSizeControlSystem(
       onSizeChange(1)
     }
 
-    // Thumbstick up/down → cycle distance
+    // Right thumbstick up/down → cycle distance
     if (rightController.getPressed(ButtonBits.ButtonThumbRU)) {
       onDistanceChange(1)
     }
     if (rightController.getPressed(ButtonBits.ButtonThumbRD)) {
       onDistanceChange(-1)
+    }
+
+    // Left thumbstick up/down → adjust height
+    leftController?.let { controller ->
+      if (controller.getPressed(ButtonBits.ButtonThumbLU)) {
+        onHeightChange(1)
+      }
+      if (controller.getPressed(ButtonBits.ButtonThumbLD)) {
+        onHeightChange(-1)
+      }
     }
   }
 }
