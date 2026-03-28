@@ -75,8 +75,8 @@ class HelloWorldActivity : AppSystemActivity() {
     private const val TAG = "VirtualMonitor"
   }
 
-  val currentSizeIndex = mutableIntStateOf(2)      // 65" TV
-  val currentDistanceIndex = mutableIntStateOf(1)  // Living Room
+  val currentSizeIndex = mutableIntStateOf(7)      // Large Theater
+  val currentDistanceIndex = mutableIntStateOf(4)  // Mid Theater
   val currentHeightIndex = mutableIntStateOf(2)    // Eye Level
 
   private var panelEntity: Entity? = null
