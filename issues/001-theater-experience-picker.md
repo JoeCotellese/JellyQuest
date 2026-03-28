@@ -82,7 +82,7 @@ Vertical card stack (4 cards, no scrolling). Each card contains theater name, on
 - **`TheaterPickerPanel.kt`** — Compose UI (card stack with inline seat selectors)
 
 ### Modified Files
-- **`ScreenSizeControlSystem.kt`** — Add `onTheaterToggle` callback for X button (`ButtonX`)
+- **`ControllerInputSystem.kt`** — Add `onTheaterToggle` callback for X button (`ButtonX`)
 - **`JellyQuestActivity.kt`** — Theater picker panel entity, registration, spawn/dismiss, mutual exclusion with browse panel, `applyTheaterPreset()` method
 - **`res/values/ids.xml`** — Add `theater_picker_panel` ID
 

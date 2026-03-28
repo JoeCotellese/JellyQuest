@@ -2,5 +2,4 @@
 <resources>
   <item type="id" name="hello_panel" />
   <item type="id" name="browse_panel" />
-  <item type="id" name="theater_picker_panel" />
 </resources>

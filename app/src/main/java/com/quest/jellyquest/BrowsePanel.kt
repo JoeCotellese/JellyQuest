@@ -3,6 +3,7 @@ package com.quest.jellyquest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.meta.spatial.uiset.button.PrimaryButton
+import com.meta.spatial.uiset.button.SecondaryButton
 import com.meta.spatial.uiset.theme.LocalColorScheme
 import com.meta.spatial.uiset.theme.SpatialTheme
 import com.quest.jellyquest.streaming.AuthState
@@ -38,19 +41,25 @@ import com.quest.jellyquest.streaming.JellyfinItem
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+enum class BrowseTab { BROWSE, THEATER }
+
 /**
- * Secondary panel for connecting to a Jellyfin server and browsing media.
+ * Tabbed panel combining media browsing and theater configuration.
  * Uses Quick Connect for authentication — no typing passwords in VR.
  */
 @Composable
 fun BrowsePanel(
     jellyfinClient: JellyfinClient,
     onMediaSelected: (UUID) -> Unit,
+    currentSizeIndex: Int,
+    currentDistanceIndex: Int,
+    onTheaterSelected: (sizeIndex: Int, distanceIndex: Int, screenHeightM: Float) -> Unit,
 ) {
     val authState by jellyfinClient.authState.collectAsState()
     val errorMessage by jellyfinClient.errorMessage.collectAsState()
     // Scope at this level survives child composable transitions (prompt -> waiting -> browser)
     val scope = rememberCoroutineScope()
+    var activeTab by remember { mutableStateOf(BrowseTab.BROWSE) }
 
     SpatialTheme(colorScheme = draculaSpatialColorScheme()) {
         Column(
@@ -60,22 +69,57 @@ fun BrowsePanel(
                 .background(brush = LocalColorScheme.current.panel)
                 .padding(24.dp),
         ) {
-            when (authState) {
-                AuthState.DISCONNECTED, AuthState.ERROR -> {
-                    QuickConnectPrompt(
-                        onConnect = {
-                            scope.launch { jellyfinClient.startQuickConnect() }
-                        },
-                        errorMessage = if (authState == AuthState.ERROR) errorMessage else null,
-                    )
+            // Tab bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    if (activeTab == BrowseTab.BROWSE) {
+                        PrimaryButton(label = "Browse", expanded = true, onClick = {})
+                    } else {
+                        SecondaryButton(label = "Browse", expanded = true, onClick = { activeTab = BrowseTab.BROWSE })
+                    }
                 }
-                AuthState.QUICK_CONNECT_PENDING -> {
-                    QuickConnectWaiting(jellyfinClient = jellyfinClient)
+                Box(modifier = Modifier.weight(1f)) {
+                    if (activeTab == BrowseTab.THEATER) {
+                        PrimaryButton(label = "Theater", expanded = true, onClick = {})
+                    } else {
+                        SecondaryButton(label = "Theater", expanded = true, onClick = { activeTab = BrowseTab.THEATER })
+                    }
                 }
-                AuthState.AUTHENTICATED -> {
-                    LibraryBrowser(
-                        jellyfinClient = jellyfinClient,
-                        onMediaSelected = onMediaSelected,
+            }
+
+            Spacer(modifier = Modifier.size(16.dp))
+
+            // Tab content
+            when (activeTab) {
+                BrowseTab.BROWSE -> {
+                    when (authState) {
+                        AuthState.DISCONNECTED, AuthState.ERROR -> {
+                            QuickConnectPrompt(
+                                onConnect = {
+                                    scope.launch { jellyfinClient.startQuickConnect() }
+                                },
+                                errorMessage = if (authState == AuthState.ERROR) errorMessage else null,
+                            )
+                        }
+                        AuthState.QUICK_CONNECT_PENDING -> {
+                            QuickConnectWaiting(jellyfinClient = jellyfinClient)
+                        }
+                        AuthState.AUTHENTICATED -> {
+                            LibraryBrowser(
+                                jellyfinClient = jellyfinClient,
+                                onMediaSelected = onMediaSelected,
+                            )
+                        }
+                    }
+                }
+                BrowseTab.THEATER -> {
+                    TheaterPickerContent(
+                        currentSizeIndex = currentSizeIndex,
+                        currentDistanceIndex = currentDistanceIndex,
+                        onTheaterSelected = onTheaterSelected,
                     )
                 }
             }

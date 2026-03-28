@@ -123,6 +123,18 @@ class ExoPlayerSource(context: Context) : StreamSource {
         if (player.isPlaying) player.pause() else player.play()
     }
 
+    override fun seekForward(seconds: Long) {
+        player.seekTo(player.currentPosition + (seconds * 1000))
+    }
+
+    override fun seekBackward(seconds: Long) {
+        player.seekTo((player.currentPosition - (seconds * 1000)).coerceAtLeast(0))
+    }
+
+    override fun stop() {
+        disconnect()
+    }
+
     /** Release the ExoPlayer instance. Call from Activity.onDestroy(). */
     fun release() {
         player.release()

@@ -39,7 +39,7 @@ JellyQuestActivity          -- VR activity, panel lifecycle, anchor positioning
   |
   +-- JellyfinClient        -- Jellyfin SDK wrapper, Quick Connect auth, library cache
   +-- ExoPlayerSource       -- ExoPlayer streaming with CylinderLayer
-  +-- ScreenSizeControlSystem -- Controller button input handling
+  +-- ControllerInputSystem -- Controller button input handling
   |
   +-- BrowsePanel           -- Jellyfin library browser (Compose)
   +-- TheaterPickerPanel    -- Theater experience selector (Compose + UISet)
