@@ -13,6 +13,9 @@ data class SeatPosition(
     val distanceIndex: Int,
 )
 
+// Bottom of screen sits at stage height, like a real theater
+const val STAGE_HEIGHT = 1.2f
+
 // Screen center at 2.5m simulates a raised theater screen viewed from a seated position (~1.1m eye height)
 const val THEATER_SCREEN_HEIGHT = 2.5f
 
