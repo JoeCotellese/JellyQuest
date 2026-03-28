@@ -28,7 +28,7 @@ class PlaybackReporter(
     suspend fun startReporting(itemId: UUID) {
         stopReporting()
         currentItemId = itemId
-        val positionTicks = positionProvider.currentPositionMs() * TICKS_PER_MS
+        val positionTicks = positionProvider.currentPositionMs().coerceAtLeast(0) * TICKS_PER_MS
         jellyfinClient.reportPlaybackStart(itemId, positionTicks)
         Log.i(TAG, "Started reporting for $itemId at ${positionTicks / TICKS_PER_MS}ms")
         launchPeriodicReporting(itemId)
@@ -39,7 +39,7 @@ class PlaybackReporter(
         val itemId = currentItemId ?: return
         reportingJob?.cancel()
         reportingJob = null
-        val positionTicks = positionProvider.currentPositionMs() * TICKS_PER_MS
+        val positionTicks = positionProvider.currentPositionMs().coerceAtLeast(0) * TICKS_PER_MS
         jellyfinClient.reportPlaybackStopped(itemId, positionTicks)
         currentItemId = null
         Log.i(TAG, "Stopped reporting for $itemId at ${positionTicks / TICKS_PER_MS}ms")
@@ -50,7 +50,7 @@ class PlaybackReporter(
         val itemId = currentItemId ?: return
         reportingJob?.cancel()
         reportingJob = null
-        val positionTicks = positionMs * TICKS_PER_MS
+        val positionTicks = positionMs.coerceAtLeast(0) * TICKS_PER_MS
         jellyfinClient.reportPlaybackStopped(itemId, positionTicks)
         currentItemId = null
         Log.i(TAG, "Stopped reporting for $itemId at ${positionMs}ms (pre-captured)")
@@ -59,7 +59,7 @@ class PlaybackReporter(
     /** Report current position immediately (e.g., on pause). */
     suspend fun reportCurrentPosition() {
         val itemId = currentItemId ?: return
-        val positionTicks = positionProvider.currentPositionMs() * TICKS_PER_MS
+        val positionTicks = positionProvider.currentPositionMs().coerceAtLeast(0) * TICKS_PER_MS
         jellyfinClient.reportPlaybackProgress(itemId, positionTicks)
     }
 
@@ -68,7 +68,7 @@ class PlaybackReporter(
         val itemId = currentItemId ?: return
         reportingJob?.cancel()
         reportingJob = null
-        val positionTicks = positionProvider.currentPositionMs() * TICKS_PER_MS
+        val positionTicks = positionProvider.currentPositionMs().coerceAtLeast(0) * TICKS_PER_MS
         jellyfinClient.reportPlaybackProgress(itemId, positionTicks, isPaused = true)
         Log.i(TAG, "Paused reporting for $itemId at ${positionTicks / TICKS_PER_MS}ms")
     }
@@ -77,7 +77,7 @@ class PlaybackReporter(
     suspend fun resumeReporting() {
         val itemId = currentItemId ?: return
         if (reportingJob != null) return // Already reporting
-        val positionTicks = positionProvider.currentPositionMs() * TICKS_PER_MS
+        val positionTicks = positionProvider.currentPositionMs().coerceAtLeast(0) * TICKS_PER_MS
         jellyfinClient.reportPlaybackProgress(itemId, positionTicks)
         Log.i(TAG, "Resumed reporting for $itemId at ${positionTicks / TICKS_PER_MS}ms")
         launchPeriodicReporting(itemId)
@@ -87,7 +87,7 @@ class PlaybackReporter(
         reportingJob = scope.launch {
             while (isActive) {
                 delay(REPORT_INTERVAL_MS)
-                val ticks = positionProvider.currentPositionMs() * TICKS_PER_MS
+                val ticks = positionProvider.currentPositionMs().coerceAtLeast(0) * TICKS_PER_MS
                 jellyfinClient.reportPlaybackProgress(itemId, ticks)
             }
         }

@@ -3,8 +3,10 @@ package com.quest.jellyquest
 import android.os.Bundle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -122,9 +124,11 @@ class JellyQuestActivity : AppSystemActivity() {
 
   override fun onPause() {
     // Capture position and send stopped report so Jellyfin saves userData.
-    // If user returns, onResume will start a new reporting session.
+    // NonCancellable ensures the network call completes even if onDestroy cancels the scope.
     val positionMs = exoPlayerSource.player.currentPosition
-    activityScope.launch { playbackReporter.stopReportingAtPosition(positionMs) }
+    activityScope.launch {
+      withContext(NonCancellable) { playbackReporter.stopReportingAtPosition(positionMs) }
+    }
     super.onPause()
   }
 
