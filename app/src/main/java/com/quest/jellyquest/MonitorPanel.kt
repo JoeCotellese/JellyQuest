@@ -29,11 +29,10 @@ import com.quest.jellyquest.streaming.StreamSource
 @Composable
 fun MonitorPanel(
     streamSource: StreamSource?,
-    sizeIndex: State<Int>,
-    distanceIndex: State<Int>,
+    screenConfig: State<ScreenConfig>,
 ) {
     if (streamSource == null) {
-        HelloPanel(sizeIndex = sizeIndex, distanceIndex = distanceIndex)
+        HelloPanel(screenConfig = screenConfig)
         return
     }
 
@@ -42,7 +41,7 @@ fun MonitorPanel(
 
     when (state) {
         ConnectionState.DISCONNECTED -> {
-            HelloPanel(sizeIndex = sizeIndex, distanceIndex = distanceIndex)
+            HelloPanel(screenConfig = screenConfig)
         }
         ConnectionState.CONNECTING -> {
             Box(

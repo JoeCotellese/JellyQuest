@@ -32,21 +32,21 @@ import com.meta.spatial.uiset.theme.SpatialTheme
  */
 @Composable
 fun TheaterPickerContent(
-    currentSizeIndex: Int,
-    currentDistanceIndex: Int,
-    onTheaterSelected: (sizeIndex: Int, distanceIndex: Int, screenHeightM: Float) -> Unit,
+    currentScreen: ScreenConfig,
+    onTheaterSelected: (theater: TheaterExperience, seat: SeatPosition) -> Unit,
 ) {
-    // Find which theater and seat are currently active
+    // Find which theater and seat are currently active based on screen dimensions
     var activeTheaterIndex by remember {
         mutableIntStateOf(
-            THEATER_EXPERIENCES.indexOfFirst { it.screenSizeIndex == currentSizeIndex }
-                .coerceAtLeast(0)
+            THEATER_EXPERIENCES.indexOfFirst {
+                it.screenWidthM == currentScreen.widthM && it.screenHeightM == currentScreen.heightM
+            }.coerceAtLeast(0)
         )
     }
     var activeSeatIndices by remember {
         mutableStateOf(
             THEATER_EXPERIENCES.map { theater ->
-                theater.seats.indexOfFirst { it.distanceIndex == currentDistanceIndex }
+                theater.seats.indexOfFirst { it.distanceM == currentScreen.distanceM }
                     .let { if (it >= 0) it else 1 }
             }
         )
@@ -84,7 +84,7 @@ fun TheaterPickerContent(
                     onClick = {
                         activeTheaterIndex = theaterIdx
                         val seat = theater.seats[activeSeatIndices[theaterIdx]]
-                        onTheaterSelected(theater.screenSizeIndex, seat.distanceIndex, theater.screenHeightM)
+                        onTheaterSelected(theater, seat)
                     },
                 )
 
@@ -127,7 +127,7 @@ fun TheaterPickerContent(
                                             activeSeatIndices = activeSeatIndices.toMutableList().apply {
                                                 this[theaterIdx] = seatIdx
                                             }
-                                            onTheaterSelected(theater.screenSizeIndex, seat.distanceIndex, theater.screenHeightM)
+                                            onTheaterSelected(theater, seat)
                                         },
                                     )
                                 }
