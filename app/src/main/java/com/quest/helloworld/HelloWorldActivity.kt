@@ -5,9 +5,11 @@ import android.util.Log
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.net.toUri
 import com.meta.spatial.castinputforward.CastInputForwardFeature
 import com.meta.spatial.compose.ComposeFeature
 import com.meta.spatial.compose.ComposeViewPanelRegistration
+import com.meta.spatial.core.Color4
 import com.meta.spatial.core.Entity
 import com.meta.spatial.core.Pose
 import com.meta.spatial.core.Query
@@ -23,10 +25,14 @@ import com.meta.spatial.runtime.ReferenceSpace
 import com.meta.spatial.runtime.ButtonBits
 import com.meta.spatial.toolkit.AppSystemActivity
 import com.meta.spatial.toolkit.DpPerMeterDisplayOptions
+import com.meta.spatial.toolkit.Material
+import com.meta.spatial.toolkit.Mesh
+import com.meta.spatial.toolkit.MeshCollision
 import com.meta.spatial.toolkit.PanelInputOptions
 import com.meta.spatial.toolkit.PanelRegistration
 import com.meta.spatial.toolkit.PanelStyleOptions
 import com.meta.spatial.toolkit.QuadShapeOptions
+import com.meta.spatial.toolkit.Box
 import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.UIPanelSettings
 import com.meta.spatial.toolkit.createPanelEntity
@@ -79,7 +85,8 @@ class HelloWorldActivity : AppSystemActivity() {
 
   val currentSizeIndex = mutableIntStateOf(7)      // Large Theater
   val currentDistanceIndex = mutableIntStateOf(4)  // Mid Theater
-  var currentScreenHeightM = THEATER_SCREEN_HEIGHT  // Screen center height (meters)
+  // Screen center Y: bottom edge at STAGE_HEIGHT + half the screen's physical height
+  var currentScreenHeightM = STAGE_HEIGHT + (SCREEN_SIZES[7].heightM / 2f)
 
   private var panelEntity: Entity? = null
   private var browsePanelEntity: Entity? = null
@@ -134,13 +141,15 @@ class HelloWorldActivity : AppSystemActivity() {
     scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
 
     scene.setLightingEnvironment(
-        ambientColor = Vector3(1.0f),
-        sunColor = Vector3(7.0f, 7.0f, 7.0f),
+        ambientColor = Vector3(0.3f),
+        sunColor = Vector3(2.0f, 2.0f, 2.0f),
         sunDirection = -Vector3(1.0f, 3.0f, -2.0f),
-        environmentIntensity = 0.3f,
+        environmentIntensity = 0.1f,
     )
 
     scene.setViewOrigin(0.0f, 0.0f, 0.0f, 0.0f)
+
+    spawnEnvironment()
 
     // Try to capture the anchor now; if head tracking isn't ready yet,
     // the AnchorCaptureSystem will keep trying each frame until it succeeds.
@@ -276,10 +285,35 @@ class HelloWorldActivity : AppSystemActivity() {
     theaterPickerEntity = null
   }
 
+  private fun spawnEnvironment() {
+    // Skybox: near-black sphere to replace the void
+    Entity.create(listOf(
+        Mesh("mesh://skybox".toUri(), hittable = MeshCollision.NoCollision),
+        Material().apply {
+          baseColor = Color4(0.05f, 0.05f, 0.07f, 1f)
+          unlit = true
+        },
+        Transform(Pose(Vector3(0f, 0f, 0f))),
+    ))
+
+    // Floor: dark charcoal ground plane (30m x 30m, 1cm thick) at y=0 (LOCAL_FLOOR)
+    Entity.create(listOf(
+        Box(Vector3(-15f, -0.005f, -15f), Vector3(15f, 0.005f, 15f)),
+        Mesh("mesh://box".toUri(), hittable = MeshCollision.NoCollision),
+        Material().apply {
+          baseColor = Color4(0.08f, 0.08f, 0.08f, 1f)
+          unlit = true
+        },
+        Transform(Pose(Vector3(0f, 0f, 0f))),
+    ))
+  }
+
   private fun applyTheaterPreset(sizeIndex: Int, distanceIndex: Int, screenHeightM: Float) {
     currentSizeIndex.intValue = sizeIndex
     currentDistanceIndex.intValue = distanceIndex
-    currentScreenHeightM = screenHeightM
+    // Position screen so its bottom edge sits at stage height (1.2m above floor)
+    val screenPhysicalHeight = SCREEN_SIZES[sizeIndex].heightM
+    currentScreenHeightM = STAGE_HEIGHT + (screenPhysicalHeight / 2f)
     logScreenPosition()
     respawnPanel()
   }
