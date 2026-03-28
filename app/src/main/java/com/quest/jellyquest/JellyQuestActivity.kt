@@ -80,6 +80,8 @@ class JellyQuestActivity : AppSystemActivity() {
   val browsePanelVisible = mutableStateOf(false)
   private var skyboxEntity: Entity? = null
   private var floorEntity: Entity? = null
+  private var wallEntities: List<Entity> = emptyList()
+  private var armrestEntities: List<Entity> = emptyList()
 
   // Jellyfin + ExoPlayer
   lateinit var exoPlayerSource: ExoPlayerSource
@@ -247,6 +249,9 @@ class JellyQuestActivity : AppSystemActivity() {
             R.id.screen_panel,
             Transform(pose),
         )
+    // The screen wall cutout provides a natural masking border around the video.
+    // Separate frame entities are not used because VideoSurfacePanelRegistration renders
+    // as a compositor layer, which doesn't share depth testing with regular mesh entities.
   }
 
   private fun respawnScreen() {
@@ -279,8 +284,14 @@ class JellyQuestActivity : AppSystemActivity() {
     val a = anchor ?: return
     skyboxEntity?.destroy()
     floorEntity?.destroy()
+    wallEntities.forEach { it.destroy() }
+    wallEntities = emptyList()
+    armrestEntities.forEach { it.destroy() }
+    armrestEntities = emptyList()
 
     val envPos = TheaterLayout.environmentPosition(a)
+    val screen = theaterState.value.screen
+    val room = theaterState.value.room
 
     // Skybox: near-black sphere centered on the user
     skyboxEntity = Entity.create(listOf(
@@ -292,15 +303,108 @@ class JellyQuestActivity : AppSystemActivity() {
         Transform(Pose(envPos)),
     ))
 
-    // Floor: dark charcoal ground plane (30m x 30m, 1cm thick) centered on the user
+    // Floor: dark charcoal ground plane centered on the user
+    val floorHalfW = room.widthBack / 2f
+    val floorHalfD = room.depth / 2f
     floorEntity = Entity.create(listOf(
-        Box(Vector3(-15f, -0.005f, -15f), Vector3(15f, 0.005f, 15f)),
+        Box(Vector3(-floorHalfW, -0.005f, -floorHalfD), Vector3(floorHalfW, 0.005f, floorHalfD)),
         Mesh("mesh://box".toUri(), hittable = MeshCollision.NoCollision),
         Material().apply {
           baseColor = Color4(0.08f, 0.08f, 0.08f, 1f)
           unlit = true
         },
         Transform(Pose(envPos)),
+    ))
+
+    // Walls and ceiling
+    val wallLength = TheaterLayout.wallLength(screen, room)
+    val halfH = room.ceilingHeight / 2f
+    val t = TheaterEnvironment.WALL_THICKNESS
+
+    // Screen wall splits around the screen opening — left flank, right flank, and top strip
+    val screenHalfW = screen.widthM / 2f
+    val screenTop = screen.screenBottomM + screen.heightM
+    val screenWallPose = TheaterLayout.screenWallPose(a, screen, room)
+
+    // DEBUG: bright colors to identify walls
+    // Red=front/screen, Blue=back, Green=left, Yellow=right, White=ceiling
+    val DEBUG_FRONT = Color4(0.8f, 0.1f, 0.1f, 1f)   // Red
+    val DEBUG_BACK = Color4(0.1f, 0.1f, 0.8f, 1f)     // Blue
+    val DEBUG_LEFT = Color4(0.1f, 0.8f, 0.1f, 1f)     // Green
+    val DEBUG_RIGHT = Color4(0.8f, 0.8f, 0.1f, 1f)    // Yellow
+    val DEBUG_CEILING = Color4(0.8f, 0.8f, 0.8f, 1f)  // White
+
+    wallEntities = listOf(
+        // Screen wall — left flank
+        createBoxEntity(
+            Box(Vector3(-room.widthFront / 2f, 0f, -t / 2f), Vector3(-screenHalfW, room.ceilingHeight, t / 2f)),
+            DEBUG_FRONT,
+            screenWallPose,
+        ),
+        // Screen wall — right flank
+        createBoxEntity(
+            Box(Vector3(screenHalfW, 0f, -t / 2f), Vector3(room.widthFront / 2f, room.ceilingHeight, t / 2f)),
+            DEBUG_FRONT,
+            screenWallPose,
+        ),
+        // Screen wall — strip above screen
+        createBoxEntity(
+            Box(Vector3(-screenHalfW, screenTop, -t / 2f), Vector3(screenHalfW, room.ceilingHeight, t / 2f)),
+            DEBUG_FRONT,
+            screenWallPose,
+        ),
+        // Screen wall — strip below screen
+        createBoxEntity(
+            Box(Vector3(-screenHalfW, 0f, -t / 2f), Vector3(screenHalfW, screen.screenBottomM, t / 2f)),
+            DEBUG_FRONT,
+            screenWallPose,
+        ),
+        // Back wall
+        createBoxEntity(
+            Box(Vector3(-room.widthBack / 2f, 0f, -t / 2f), Vector3(room.widthBack / 2f, room.ceilingHeight, t / 2f)),
+            DEBUG_BACK,
+            TheaterLayout.backWallPose(a, room),
+        ),
+        // Left wall — extends along local Z (front-to-back), thin along local X
+        createBoxEntity(
+            Box(Vector3(-t / 2f, 0f, -wallLength / 2f), Vector3(t / 2f, room.ceilingHeight, wallLength / 2f)),
+            DEBUG_LEFT,
+            TheaterLayout.leftWallPose(a, screen, room),
+        ),
+        // Right wall — extends along local Z (front-to-back), thin along local X
+        createBoxEntity(
+            Box(Vector3(-t / 2f, 0f, -wallLength / 2f), Vector3(t / 2f, room.ceilingHeight, wallLength / 2f)),
+            DEBUG_RIGHT,
+            TheaterLayout.rightWallPose(a, screen, room),
+        ),
+        // Ceiling
+        createBoxEntity(
+            Box(Vector3(-room.widthBack / 2f, -t / 2f, -wallLength / 2f), Vector3(room.widthBack / 2f, t / 2f, wallLength / 2f)),
+            DEBUG_CEILING,
+            TheaterLayout.ceilingPose(a, screen, room),
+        ),
+    )
+
+    // Armrests
+    val armrestBox = Box(
+        Vector3(-ViewerLayout.ARMREST_LENGTH / 2f, -ViewerLayout.ARMREST_HEIGHT / 2f, -ViewerLayout.ARMREST_WIDTH / 2f),
+        Vector3(ViewerLayout.ARMREST_LENGTH / 2f, ViewerLayout.ARMREST_HEIGHT / 2f, ViewerLayout.ARMREST_WIDTH / 2f),
+    )
+    armrestEntities = listOf(
+        createBoxEntity(armrestBox, TheaterEnvironment.ARMREST_COLOR, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = true)),
+        createBoxEntity(armrestBox, TheaterEnvironment.ARMREST_COLOR, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = false)),
+    )
+  }
+
+  private fun createBoxEntity(box: Box, color: Color4, pose: Pose): Entity {
+    return Entity.create(listOf(
+        box,
+        Mesh("mesh://box".toUri(), hittable = MeshCollision.NoCollision),
+        Material().apply {
+          baseColor = color
+          unlit = true
+        },
+        Transform(Pose(pose.t, pose.q)),
     ))
   }
 
@@ -314,6 +418,7 @@ class JellyQuestActivity : AppSystemActivity() {
             screenBottomM = theater.screenBottomM,
         ),
         riserHeightM = seat.riserHeightM,
+        room = TheaterEnvironment.computeRoom(theater),
     )
     scene.setViewOrigin(0.0f, theaterState.value.riserHeightM, 0.0f)
     Log.i(TAG, "Seat riser height: ${theaterState.value.riserHeightM}m")

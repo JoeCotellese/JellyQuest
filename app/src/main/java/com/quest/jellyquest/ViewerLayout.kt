@@ -22,6 +22,24 @@ object ViewerLayout {
     const val BROWSE_BELOW_EYE = 0.2f
     const val BROWSE_TILT_DEG = 15f
 
+    // Armrest dimensions and placement
+    const val ARMREST_LENGTH = 0.45f       // front to back
+    const val ARMREST_WIDTH = 0.06f        // side to side
+    const val ARMREST_HEIGHT = 0.04f       // thickness of the padded top
+    const val ARMREST_SIDE_OFFSET = 0.30f  // distance to each side of center
+    const val ARMREST_FORWARD_OFFSET = 0.10f // slightly forward of body center
+    const val ARMREST_BELOW_EYE = 0.45f    // below seated eye height (elbow level)
+
+    /** Position an armrest at the viewer's side. */
+    fun armrestPose(anchor: Anchor, riserHeightM: Float, isLeft: Boolean): Pose {
+        val lateral = if (isLeft) anchor.left else anchor.right
+        val xz = anchor.position +
+            anchor.forward * ARMREST_FORWARD_OFFSET +
+            lateral * ARMREST_SIDE_OFFSET
+        val y = SEATED_EYE_HEIGHT + riserHeightM - ARMREST_BELOW_EYE
+        return Pose(Vector3(xz.x, y, xz.z), anchor.rotation)
+    }
+
     /**
      * Position the browse panel to the left of the screen direction,
      * at the viewer's current seated eye height (including riser).

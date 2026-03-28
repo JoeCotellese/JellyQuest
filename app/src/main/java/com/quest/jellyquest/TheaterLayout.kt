@@ -21,4 +21,53 @@ object TheaterLayout {
     fun environmentPosition(anchor: Anchor): Vector3 {
         return Vector3(anchor.position.x, 0f, anchor.position.z)
     }
+
+    /** Screen wall — behind the screen, spanning the full front width. Y=0 (floor level). */
+    fun screenWallPose(anchor: Anchor, screen: ScreenConfig, room: RoomGeometry): Pose {
+        val xz = anchor.position + anchor.forward * (screen.distanceM + TheaterEnvironment.WALL_THICKNESS / 2f)
+        val position = Vector3(xz.x, 0f, xz.z)
+        return Pose(position, anchor.rotation)
+    }
+
+    /** Back wall — behind the viewer at backDistance. Y=0 (floor level). */
+    fun backWallPose(anchor: Anchor, room: RoomGeometry): Pose {
+        val xz = anchor.position - anchor.forward * room.backDistance
+        val position = Vector3(xz.x, 0f, xz.z)
+        return Pose(position, anchor.rotation)
+    }
+
+    /** Left side wall — runs from back wall to screen wall. Y=0 (floor level). */
+    fun leftWallPose(anchor: Anchor, screen: ScreenConfig, room: RoomGeometry): Pose {
+        val centerForward = (screen.distanceM - room.backDistance) / 2f
+        val avgHalfWidth = (room.widthFront + room.widthBack) / 4f
+        val xz = anchor.position +
+            anchor.forward * centerForward +
+            anchor.left * avgHalfWidth
+        val position = Vector3(xz.x, 0f, xz.z)
+        return Pose(position, anchor.rotation)
+    }
+
+    /** Right side wall — mirror of left. Y=0 (floor level). */
+    fun rightWallPose(anchor: Anchor, screen: ScreenConfig, room: RoomGeometry): Pose {
+        val centerForward = (screen.distanceM - room.backDistance) / 2f
+        val avgHalfWidth = (room.widthFront + room.widthBack) / 4f
+        val xz = anchor.position +
+            anchor.forward * centerForward -
+            anchor.left * avgHalfWidth
+        val position = Vector3(xz.x, 0f, xz.z)
+        return Pose(position, anchor.rotation)
+    }
+
+    /** Ceiling — centered over the room. */
+    fun ceilingPose(anchor: Anchor, screen: ScreenConfig, room: RoomGeometry): Pose {
+        val centerForward = (screen.distanceM - room.backDistance) / 2f
+        val xz = anchor.position + anchor.forward * centerForward
+        val position = Vector3(xz.x, room.ceilingHeight, xz.z)
+        return Pose(position, anchor.rotation)
+    }
+
+    /** Wall length from screen wall to back wall. */
+    fun wallLength(screen: ScreenConfig, room: RoomGeometry): Float {
+        return screen.distanceM + room.backDistance
+    }
 }
