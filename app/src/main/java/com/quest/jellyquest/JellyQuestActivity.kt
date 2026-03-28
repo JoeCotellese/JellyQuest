@@ -32,15 +32,19 @@ import com.meta.spatial.runtime.ButtonBits
 import com.meta.spatial.toolkit.AppSystemActivity
 import com.meta.spatial.toolkit.DpPerMeterDisplayOptions
 import com.meta.spatial.toolkit.Material
+import com.meta.spatial.toolkit.MediaPanelRenderOptions
+import com.meta.spatial.toolkit.MediaPanelSettings
 import com.meta.spatial.toolkit.Mesh
 import com.meta.spatial.toolkit.MeshCollision
 import com.meta.spatial.toolkit.PanelInputOptions
 import com.meta.spatial.toolkit.PanelRegistration
 import com.meta.spatial.toolkit.PanelStyleOptions
+import com.meta.spatial.toolkit.PixelDisplayOptions
 import com.meta.spatial.toolkit.QuadShapeOptions
 import com.meta.spatial.toolkit.Box
 import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.UIPanelSettings
+import com.meta.spatial.toolkit.VideoSurfacePanelRegistration
 import com.meta.spatial.toolkit.createPanelEntity
 import com.meta.spatial.vr.VRFeature
 import com.quest.jellyquest.streaming.AuthState
@@ -76,6 +80,7 @@ class JellyQuestActivity : AppSystemActivity() {
   val currentScreen: State<ScreenConfig> get() = derivedStateOf { theaterState.value.screen }
 
   private var screenEntity: Entity? = null
+  private var screenOverlayEntity: Entity? = null
   private var browsePanelEntity: Entity? = null
   val browsePanelVisible = mutableStateOf(false)
   private var skyboxEntity: Entity? = null
@@ -228,11 +233,18 @@ class JellyQuestActivity : AppSystemActivity() {
             R.id.screen_panel,
             Transform(pose),
         )
+    screenOverlayEntity =
+        Entity.createPanelEntity(
+            R.id.screen_overlay_panel,
+            Transform(pose),
+        )
   }
 
   private fun respawnScreen() {
     screenEntity?.destroy()
     screenEntity = null
+    screenOverlayEntity?.destroy()
+    screenOverlayEntity = null
     spawnScreen()
   }
 
@@ -356,9 +368,27 @@ class JellyQuestActivity : AppSystemActivity() {
 
   override fun registerPanels(): List<PanelRegistration> {
     return listOf(
-        // Main screen panel
-        ComposeViewPanelRegistration(
+        // Main screen panel — direct-to-surface video rendering via compositor layer.
+        // ExoPlayer renders directly to the surface provided by the SDK, bypassing the
+        // Android View system for significantly sharper video output.
+        VideoSurfacePanelRegistration(
             R.id.screen_panel,
+            surfaceConsumer = { _, surface ->
+              exoPlayerSource.attachSurface(surface)
+            },
+            settingsCreator = {
+              val screen = theaterState.value.screen
+              MediaPanelSettings(
+                  shape = QuadShapeOptions(width = screen.widthM, height = screen.heightM),
+                  display = PixelDisplayOptions(width = 1920, height = 1080),
+                  rendering = MediaPanelRenderOptions(isDRM = false, zIndex = 0),
+                  style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
+              )
+            },
+        ),
+        // Screen overlay panel — transparent Compose layer for status text (paused, connecting, etc.)
+        ComposeViewPanelRegistration(
+            R.id.screen_overlay_panel,
             composeViewCreator = { _, ctx ->
               ComposeView(ctx).apply {
                 setContent {
@@ -371,7 +401,6 @@ class JellyQuestActivity : AppSystemActivity() {
             },
             settingsCreator = {
               val screen = theaterState.value.screen
-              // Scale density inversely with panel width to keep texture allocation reasonable.
               val baseDpPerMeter = 600f
               val referencePanelWidth = 1.44f // 65" TV as baseline
               val dpPerMeter = (baseDpPerMeter * referencePanelWidth / screen.widthM).coerceIn(40f, baseDpPerMeter)
