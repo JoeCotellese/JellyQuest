@@ -403,7 +403,7 @@ class HelloWorldActivity : AppSystemActivity() {
             },
             settingsCreator = {
               UIPanelSettings(
-                  shape = QuadShapeOptions(width = 0.6f, height = 0.8f),
+                  shape = QuadShapeOptions(width = 0.9f, height = 0.8f),
                   style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
                   display = DpPerMeterDisplayOptions(),
                   input = PanelInputOptions(

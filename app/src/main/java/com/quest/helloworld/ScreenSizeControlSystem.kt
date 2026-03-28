@@ -33,13 +33,13 @@ class ScreenSizeControlSystem(
     val rightController = avatarBody.rightHand.tryGetComponent<Controller>() ?: return
     val leftController = avatarBody.leftHand.tryGetComponent<Controller>()
 
-    // A button → toggle browse panel
+    // A button (right controller) → toggle theater picker (right panel)
     val aDown = (rightController.buttonState and ButtonBits.ButtonA) != 0
     val aChanged = (rightController.changedButtons and ButtonBits.ButtonA) != 0
     if (aDown && aChanged && !aButtonHandled) {
       aButtonHandled = true
       Log.d(TAG, "A button pressed")
-      onBrowseToggle()
+      onTheaterToggle()
     } else if (!aDown && aChanged) {
       aButtonHandled = false
     }
@@ -55,14 +55,14 @@ class ScreenSizeControlSystem(
       bButtonHandled = false
     }
 
-    // X button (left controller) → toggle theater picker
+    // X button (left controller) → toggle browse panel (left panel)
     leftController?.let { controller ->
       val xDown = (controller.buttonState and ButtonBits.ButtonX) != 0
       val xChanged = (controller.changedButtons and ButtonBits.ButtonX) != 0
       if (xDown && xChanged && !xButtonHandled) {
         xButtonHandled = true
         Log.d(TAG, "X button pressed")
-        onTheaterToggle()
+        onBrowseToggle()
       } else if (!xDown && xChanged) {
         xButtonHandled = false
       }
