@@ -100,7 +100,7 @@ Implements `StreamSource` using Media3 ExoPlayer:
 - `MonitorPanel.kt` -- takes any `StreamSource?`, works as-is
 
 ### Verify
-- [ ] Wire ExoPlayerSource into HelloWorldActivity with a hardcoded test URL
+- [ ] Wire ExoPlayerSource into JellyQuestActivity with a hardcoded test URL
 - [ ] Video plays on the VR monitor panel
 
 ---
@@ -191,11 +191,11 @@ Coroutines via `rememberCoroutineScope()` for suspend calls.
 
 ---
 
-## Phase 5: HelloWorldActivity Wiring
+## Phase 5: JellyQuestActivity Wiring
 
 **Goal:** Connect all components in the main activity.
 
-### Modify: `HelloWorldActivity.kt`
+### Modify: `JellyQuestActivity.kt`
 
 **Remove:**
 - `libVLC: LibVLC`
@@ -297,7 +297,7 @@ Controller Input
 ScreenSizeControlSystem
        |
        v
-HelloWorldActivity
+JellyQuestActivity
   |         |          |
   v         v          v
 ExoPlayer  Jellyfin   SpatialAudio
@@ -320,7 +320,7 @@ MonitorPanel  BrowsePanel  AudioSessionId
 | `streaming/ExoPlayerSource.kt` | Create |
 | `streaming/JellyfinClient.kt` | Create |
 | `BrowsePanel.kt` | Rewrite |
-| `HelloWorldActivity.kt` | Modify |
+| `JellyQuestActivity.kt` | Modify |
 | `streaming/StreamSource.kt` | Unchanged |
 | `MonitorPanel.kt` | Unchanged |
 | `HelloPanel.kt` | Unchanged |

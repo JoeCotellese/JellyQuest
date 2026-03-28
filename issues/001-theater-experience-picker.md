@@ -83,7 +83,7 @@ Vertical card stack (4 cards, no scrolling). Each card contains theater name, on
 
 ### Modified Files
 - **`ScreenSizeControlSystem.kt`** — Add `onTheaterToggle` callback for X button (`ButtonX`)
-- **`HelloWorldActivity.kt`** — Theater picker panel entity, registration, spawn/dismiss, mutual exclusion with browse panel, `applyTheaterPreset()` method
+- **`JellyQuestActivity.kt`** — Theater picker panel entity, registration, spawn/dismiss, mutual exclusion with browse panel, `applyTheaterPreset()` method
 - **`res/values/ids.xml`** — Add `theater_picker_panel` ID
 
 ### Data Model

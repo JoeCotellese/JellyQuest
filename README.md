@@ -35,7 +35,7 @@ Viewing distances range from 0.7m (desk) to 30m (balcony).
 ## Architecture
 
 ```
-HelloWorldActivity          -- VR activity, panel lifecycle, anchor positioning
+JellyQuestActivity          -- VR activity, panel lifecycle, anchor positioning
   |
   +-- JellyfinClient        -- Jellyfin SDK wrapper, Quick Connect auth, library cache
   +-- ExoPlayerSource       -- ExoPlayer streaming with CylinderLayer
@@ -74,7 +74,7 @@ cd JellyQuest
 
 ### Jellyfin Server URL
 
-Edit `app/src/main/java/com/quest/helloworld/streaming/JellyfinClient.kt`:
+Edit `app/src/main/java/com/quest/jellyquest/streaming/JellyfinClient.kt`:
 
 ```kotlin
 const val DEFAULT_SERVER_URL = "http://YOUR_SERVER_IP:8096"

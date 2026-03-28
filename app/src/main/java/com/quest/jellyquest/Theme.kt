@@ -1,4 +1,4 @@
-package com.quest.helloworld
+package com.quest.jellyquest
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor

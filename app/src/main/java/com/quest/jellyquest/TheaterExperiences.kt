@@ -1,4 +1,4 @@
-package com.quest.helloworld
+package com.quest.jellyquest
 
 data class TheaterExperience(
     val name: String,

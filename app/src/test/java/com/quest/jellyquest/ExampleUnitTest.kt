@@ -1,4 +1,4 @@
-package com.quest.helloworld
+package com.quest.jellyquest
 
 import org.junit.Assert.*
 import org.junit.Test

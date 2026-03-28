@@ -1,4 +1,4 @@
-package com.quest.helloworld
+package com.quest.jellyquest
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

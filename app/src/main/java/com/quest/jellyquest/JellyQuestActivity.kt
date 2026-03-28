@@ -1,4 +1,4 @@
-package com.quest.helloworld
+package com.quest.jellyquest
 
 import android.os.Bundle
 import kotlinx.coroutines.CoroutineScope
@@ -39,9 +39,9 @@ import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.UIPanelSettings
 import com.meta.spatial.toolkit.createPanelEntity
 import com.meta.spatial.vr.VRFeature
-import com.quest.helloworld.streaming.AuthState
-import com.quest.helloworld.streaming.ExoPlayerSource
-import com.quest.helloworld.streaming.JellyfinClient
+import com.quest.jellyquest.streaming.AuthState
+import com.quest.jellyquest.streaming.ExoPlayerSource
+import com.quest.jellyquest.streaming.JellyfinClient
 import kotlinx.coroutines.launch
 
 data class ScreenPreset(val label: String, val widthM: Float, val heightM: Float, val minDistanceIndex: Int = 0)
@@ -81,7 +81,7 @@ val HEIGHTS = listOf(
     HeightPreset("Ceiling", 2.5f),
 )
 
-class HelloWorldActivity : AppSystemActivity() {
+class JellyQuestActivity : AppSystemActivity() {
 
   companion object {
     private const val TAG = "VirtualMonitor"
