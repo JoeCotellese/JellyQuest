@@ -5,15 +5,19 @@ import android.content.SharedPreferences
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
+import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.quickConnectApi
 import org.jellyfin.sdk.api.client.extensions.userApi
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.api.client.extensions.userViewsApi
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
@@ -21,7 +25,14 @@ import org.jellyfin.sdk.model.api.AuthenticateUserByName
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.PlayMethod
+import org.jellyfin.sdk.model.api.PlaybackOrder
+import org.jellyfin.sdk.model.api.PlaybackProgressInfo
+import org.jellyfin.sdk.model.api.PlaybackStartInfo
+import org.jellyfin.sdk.model.api.PlaybackStopInfo
 import org.jellyfin.sdk.model.api.QuickConnectDto
+import org.jellyfin.sdk.model.api.RepeatMode
+import org.jellyfin.sdk.model.api.UpdateUserItemDataDto
 import java.util.UUID
 
 enum class AuthState {
@@ -36,13 +47,26 @@ data class JellyfinItem(
     val name: String,
     val type: BaseItemKind,
     val isFolder: Boolean,
+    val playbackPositionTicks: Long = 0,
+    val runTimeTicks: Long = 0,
 ) {
+    fun toJson() = JSONObject().apply {
+        put("id", id.toString())
+        put("name", name)
+        put("type", type.name)
+        put("isFolder", isFolder)
+        put("playbackPositionTicks", playbackPositionTicks)
+        put("runTimeTicks", runTimeTicks)
+    }
+
     companion object {
         fun fromJson(json: JSONObject) = JellyfinItem(
             id = UUID.fromString(json.getString("id")),
             name = json.getString("name"),
             type = BaseItemKind.valueOf(json.getString("type")),
             isFolder = json.getBoolean("isFolder"),
+            playbackPositionTicks = json.optLong("playbackPositionTicks", 0),
+            runTimeTicks = json.optLong("runTimeTicks", 0),
         )
     }
 }
@@ -128,7 +152,9 @@ class JellyfinClient(private val context: Context) {
             val client = jellyfin.createApi(baseUrl = serverUrl)
 
             // Check if Quick Connect is enabled
-            val enabledResponse = client.quickConnectApi.getQuickConnectEnabled()
+            val enabledResponse = withContext(Dispatchers.IO) {
+                client.quickConnectApi.getQuickConnectEnabled()
+            }
             if (!enabledResponse.content) {
                 _errorMessage.value = "Quick Connect is not enabled on this server"
                 _authState.value = AuthState.ERROR
@@ -136,22 +162,28 @@ class JellyfinClient(private val context: Context) {
             }
 
             // Initiate Quick Connect session
-            var qcResult = client.quickConnectApi.initiateQuickConnect().content
+            var qcResult = withContext(Dispatchers.IO) {
+                client.quickConnectApi.initiateQuickConnect()
+            }.content
             _quickConnectCode.value = qcResult.code
             Log.i(TAG, "Quick Connect code: ${qcResult.code}")
 
             // Poll until authorized
             while (!qcResult.authenticated) {
                 delay(QUICK_CONNECT_POLL_MS)
-                qcResult = client.quickConnectApi.getQuickConnectState(
-                    secret = qcResult.secret,
-                ).content
+                qcResult = withContext(Dispatchers.IO) {
+                    client.quickConnectApi.getQuickConnectState(
+                        secret = qcResult.secret,
+                    )
+                }.content
             }
 
             // Exchange secret for access token
-            val authResult = client.userApi.authenticateWithQuickConnect(
-                data = QuickConnectDto(secret = qcResult.secret),
-            ).content
+            val authResult = withContext(Dispatchers.IO) {
+                client.userApi.authenticateWithQuickConnect(
+                    data = QuickConnectDto(secret = qcResult.secret),
+                )
+            }.content
 
             client.update(accessToken = authResult.accessToken)
             api = client
@@ -225,8 +257,10 @@ class JellyfinClient(private val context: Context) {
     suspend fun getLibraries(): List<JellyfinItem> {
         val client = api ?: return emptyList()
         return try {
-            val response = client.userViewsApi.getUserViews()
-            response.content.items?.map { it.toJellyfinItem() } ?: emptyList()
+            withContext(Dispatchers.IO) {
+                val response = client.userViewsApi.getUserViews()
+                response.content.items?.map { it.toJellyfinItem() } ?: emptyList()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch libraries", e)
             emptyList()
@@ -237,21 +271,23 @@ class JellyfinClient(private val context: Context) {
     suspend fun getItems(parentId: UUID): List<JellyfinItem> {
         val client = api ?: return emptyList()
         return try {
-            val response = client.itemsApi.getItems(
-                userId = userId,
-                parentId = parentId,
-                sortBy = listOf(ItemSortBy.SORT_NAME),
-                includeItemTypes = listOf(
-                    BaseItemKind.MOVIE,
-                    BaseItemKind.SERIES,
-                    BaseItemKind.SEASON,
-                    BaseItemKind.EPISODE,
-                    BaseItemKind.FOLDER,
-                    BaseItemKind.COLLECTION_FOLDER,
-                    BaseItemKind.BOX_SET,
-                ),
-            )
-            response.content.items?.map { it.toJellyfinItem() } ?: emptyList()
+            withContext(Dispatchers.IO) {
+                val response = client.itemsApi.getItems(
+                    userId = userId,
+                    parentId = parentId,
+                    sortBy = listOf(ItemSortBy.SORT_NAME),
+                    includeItemTypes = listOf(
+                        BaseItemKind.MOVIE,
+                        BaseItemKind.SERIES,
+                        BaseItemKind.SEASON,
+                        BaseItemKind.EPISODE,
+                        BaseItemKind.FOLDER,
+                        BaseItemKind.COLLECTION_FOLDER,
+                        BaseItemKind.BOX_SET,
+                    ),
+                )
+                response.content.items?.map { it.toJellyfinItem() } ?: emptyList()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch items for $parentId", e)
             emptyList()
@@ -267,6 +303,105 @@ class JellyfinClient(private val context: Context) {
     fun getImageUrl(itemId: UUID): String? {
         val url = baseUrl ?: return null
         return "${url}/Items/$itemId/Images/Primary?maxWidth=300&quality=80&api_key=$accessToken"
+    }
+
+    /** Fetch a single item with fresh userData from the server. */
+    suspend fun getItemFresh(itemId: UUID): JellyfinItem? {
+        val client = api ?: return null
+        return try {
+            withContext(Dispatchers.IO) {
+                val response = client.userLibraryApi.getItem(itemId, userId)
+                val item = response.content.toJellyfinItem()
+                Log.i(TAG, "Fresh item '${item.name}': positionTicks=${item.playbackPositionTicks} runTimeTicks=${item.runTimeTicks}")
+                item
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch fresh item $itemId", e)
+            null
+        }
+    }
+
+    // --- Playback State Reporting ---
+
+    var currentPlaybackItemId: UUID? = null
+        private set
+
+    /** Report that playback has started for an item. */
+    suspend fun reportPlaybackStart(itemId: UUID, positionTicks: Long = 0) {
+        val client = api ?: return
+        currentPlaybackItemId = itemId
+        try {
+            withContext(Dispatchers.IO) {
+                client.playStateApi.reportPlaybackStart(
+                    PlaybackStartInfo(
+                        itemId = itemId,
+                        positionTicks = positionTicks,
+                        canSeek = true,
+                        isPaused = false,
+                        isMuted = false,
+                        playMethod = PlayMethod.DIRECT_PLAY,
+                        repeatMode = RepeatMode.REPEAT_NONE,
+                        playbackOrder = PlaybackOrder.DEFAULT,
+                    ),
+                )
+            }
+            Log.i(TAG, "Reported playback start: $itemId at ${positionTicks / 10_000}ms")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to report playback start", e)
+        }
+    }
+
+    /** Report current playback progress (call periodically and on pause). */
+    suspend fun reportPlaybackProgress(itemId: UUID, positionTicks: Long, isPaused: Boolean = false) {
+        val client = api ?: return
+        try {
+            withContext(Dispatchers.IO) {
+                client.playStateApi.reportPlaybackProgress(
+                    PlaybackProgressInfo(
+                        itemId = itemId,
+                        positionTicks = positionTicks,
+                        canSeek = true,
+                        isPaused = isPaused,
+                        isMuted = false,
+                        playMethod = PlayMethod.DIRECT_PLAY,
+                        repeatMode = RepeatMode.REPEAT_NONE,
+                        playbackOrder = PlaybackOrder.DEFAULT,
+                    ),
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to report playback progress", e)
+        }
+    }
+
+    /** Report that playback has stopped and persist position to UserData. */
+    suspend fun reportPlaybackStopped(itemId: UUID, positionTicks: Long) {
+        val client = api ?: return
+        currentPlaybackItemId = null
+        try {
+            withContext(Dispatchers.IO) {
+                // Session-based report (updates "Now Playing" on dashboard)
+                client.playStateApi.reportPlaybackStopped(
+                    PlaybackStopInfo(
+                        itemId = itemId,
+                        positionTicks = positionTicks,
+                        failed = false,
+                    ),
+                )
+                // Directly persist position to UserData for resume support.
+                // The session-based endpoint may not save position without a WebSocket session.
+                client.itemsApi.updateItemUserData(
+                    itemId = itemId,
+                    userId = userId,
+                    data = UpdateUserItemDataDto(
+                        playbackPositionTicks = positionTicks,
+                    ),
+                )
+            }
+            Log.i(TAG, "Reported playback stopped: $itemId at ${positionTicks / 10_000}ms")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to report playback stopped", e)
+        }
     }
 
     private fun saveCacheToDisk(
@@ -321,13 +456,6 @@ class JellyfinClient(private val context: Context) {
         }
     }
 
-    private fun JellyfinItem.toJson() = JSONObject().apply {
-        put("id", id.toString())
-        put("name", name)
-        put("type", type.name)
-        put("isFolder", isFolder)
-    }
-
     private fun BaseItemDto.toJellyfinItem() = JellyfinItem(
         id = id,
         name = name ?: "Unknown",
@@ -340,5 +468,7 @@ class JellyfinClient(private val context: Context) {
             BaseItemKind.BOX_SET,
             BaseItemKind.USER_VIEW,
         )),
+        playbackPositionTicks = this.userData?.playbackPositionTicks ?: 0,
+        runTimeTicks = this.runTimeTicks ?: 0,
     )
 }

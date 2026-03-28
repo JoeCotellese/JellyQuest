@@ -3,6 +3,10 @@ package com.quest.jellyquest
 import android.os.Bundle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -42,6 +46,7 @@ import com.meta.spatial.vr.VRFeature
 import com.quest.jellyquest.streaming.AuthState
 import com.quest.jellyquest.streaming.ExoPlayerSource
 import com.quest.jellyquest.streaming.JellyfinClient
+import com.quest.jellyquest.streaming.PlaybackReporter
 import kotlinx.coroutines.launch
 
 /**
@@ -64,7 +69,7 @@ class JellyQuestActivity : AppSystemActivity() {
     private const val TAG = "VirtualMonitor"
   }
 
-  private val activityScope = CoroutineScope(Dispatchers.Main)
+  private val activityScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
   val theaterState = mutableStateOf(TheaterState())
   // Derived state for Compose panels that only need screen config
@@ -79,6 +84,7 @@ class JellyQuestActivity : AppSystemActivity() {
   // Jellyfin + ExoPlayer
   lateinit var exoPlayerSource: ExoPlayerSource
   lateinit var jellyfinClient: JellyfinClient
+  private lateinit var playbackReporter: PlaybackReporter
 
   // Anchor: immutable snapshot of the user's position and facing direction.
   // Captured at startup and on recenter. All placement is relative to this point.
@@ -103,7 +109,12 @@ class JellyQuestActivity : AppSystemActivity() {
     super.onCreate(savedInstanceState)
     exoPlayerSource = ExoPlayerSource(this)
     jellyfinClient = JellyfinClient(this)
-    Log.i(TAG, "ExoPlayer and Jellyfin client initialized")
+    playbackReporter = PlaybackReporter(
+        jellyfinClient = jellyfinClient,
+        positionProvider = { exoPlayerSource.player.currentPosition },
+        scope = activityScope,
+    )
+    Log.i(TAG, "ExoPlayer, Jellyfin client, and playback reporter initialized")
 
     // Pre-fetch library content if already authenticated from saved credentials
     if (jellyfinClient.authState.value == AuthState.AUTHENTICATED) {
@@ -111,7 +122,18 @@ class JellyQuestActivity : AppSystemActivity() {
     }
   }
 
+  override fun onPause() {
+    // Capture position and send stopped report so Jellyfin saves userData.
+    // NonCancellable ensures the network call completes even if onDestroy cancels the scope.
+    val positionMs = exoPlayerSource.player.currentPosition
+    activityScope.launch {
+      withContext(NonCancellable) { playbackReporter.stopReportingAtPosition(positionMs) }
+    }
+    super.onPause()
+  }
+
   override fun onDestroy() {
+    activityScope.cancel()
     exoPlayerSource.disconnect()
     exoPlayerSource.release()
     super.onDestroy()
@@ -159,9 +181,15 @@ class JellyQuestActivity : AppSystemActivity() {
             },
             onPlayPauseToggle = {
               exoPlayerSource.togglePlayPause()
+              activityScope.launch { playbackReporter.reportCurrentPosition() }
             },
             onStop = {
+              // Capture position before stopping player (stop resets position to 0)
+              val positionMs = exoPlayerSource.player.currentPosition
               exoPlayerSource.stop()
+              activityScope.launch {
+                playbackReporter.stopReportingAtPosition(positionMs)
+              }
               // Auto-show browse panel for next selection
               if (!browsePanelVisible.value) {
                 browsePanelVisible.value = true
@@ -365,13 +393,27 @@ class JellyQuestActivity : AppSystemActivity() {
                 setContent {
                   BrowsePanel(
                       jellyfinClient = jellyfinClient,
-                      onMediaSelected = { itemId ->
-                        val url = jellyfinClient.getStreamUrl(itemId)
-                        exoPlayerSource.connect(url)
-                        // Hide browse panel after selecting media
-                        browsePanelVisible.value = false
-                        browsePanelEntity?.destroy()
-                        browsePanelEntity = null
+                      onMediaSelected = { item ->
+                        activityScope.launch {
+                          playbackReporter.stopReporting()
+
+                          // Fetch fresh position from server (cached data may be stale)
+                          val freshItem = jellyfinClient.getItemFresh(item.id) ?: item
+                          val url = jellyfinClient.getStreamUrl(freshItem.id)
+                          val resumeMs = PlaybackReporter.computeResumePositionMs(
+                              freshItem.playbackPositionTicks,
+                              freshItem.runTimeTicks,
+                          )
+                          val startPaused = resumeMs > 0
+                          Log.i(TAG, "Media selected: '${freshItem.name}' resumeMs=$resumeMs startPaused=$startPaused")
+                          exoPlayerSource.connect(url, resumeMs, startPaused)
+                          playbackReporter.startReporting(freshItem.id)
+
+                          // Hide browse panel after selecting media
+                          browsePanelVisible.value = false
+                          browsePanelEntity?.destroy()
+                          browsePanelEntity = null
+                        }
                       },
                       currentScreen = theaterState.value.screen,
                       onTheaterSelected = { theater, seat ->
