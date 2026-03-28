@@ -3,6 +3,8 @@ package com.quest.helloworld.streaming
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,7 +36,16 @@ data class JellyfinItem(
     val name: String,
     val type: BaseItemKind,
     val isFolder: Boolean,
-)
+) {
+    companion object {
+        fun fromJson(json: JSONObject) = JellyfinItem(
+            id = UUID.fromString(json.getString("id")),
+            name = json.getString("name"),
+            type = BaseItemKind.valueOf(json.getString("type")),
+            isFolder = json.getBoolean("isFolder"),
+        )
+    }
+}
 
 /**
  * Thin wrapper around the Jellyfin SDK for Quick Connect authentication,
@@ -53,6 +64,8 @@ class JellyfinClient(private val context: Context) {
         const val DEFAULT_SERVER_URL = "http://192.168.1.9:8096"
 
         private const val QUICK_CONNECT_POLL_MS = 5_000L
+        private const val KEY_CACHED_LIBRARIES = "cached_libraries"
+        private const val KEY_CACHED_ITEMS = "cached_items"
     }
 
     private val jellyfin: Jellyfin = createJellyfin {
@@ -77,6 +90,12 @@ class JellyfinClient(private val context: Context) {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _cachedLibraries = MutableStateFlow<List<JellyfinItem>?>(null)
+    val cachedLibraries: StateFlow<List<JellyfinItem>?> = _cachedLibraries.asStateFlow()
+
+    private val _cachedItems = MutableStateFlow<Map<UUID, List<JellyfinItem>>>(emptyMap())
+    val cachedItems: StateFlow<Map<UUID, List<JellyfinItem>>> = _cachedItems.asStateFlow()
+
     init {
         // Restore saved credentials if available
         val savedUrl = prefs.getString(KEY_BASE_URL, null)
@@ -89,6 +108,9 @@ class JellyfinClient(private val context: Context) {
             api = jellyfin.createApi(baseUrl = savedUrl, accessToken = savedToken)
             _authState.value = AuthState.AUTHENTICATED
             Log.i(TAG, "Restored Jellyfin session for $savedUrl")
+
+            // Restore cached library data from disk for instant browsing
+            restoreCacheFromDisk()
         }
     }
 
@@ -147,6 +169,7 @@ class JellyfinClient(private val context: Context) {
 
             _authState.value = AuthState.AUTHENTICATED
             Log.i(TAG, "Quick Connect authenticated: ${authResult.user?.name} @ $serverUrl")
+            prefetchLibraryContent()
         } catch (e: Exception) {
             Log.e(TAG, "Quick Connect failed", e)
             _errorMessage.value = "${e.javaClass.simpleName}: ${e.message}"
@@ -164,7 +187,38 @@ class JellyfinClient(private val context: Context) {
         _quickConnectCode.value = null
         _authState.value = AuthState.DISCONNECTED
         _errorMessage.value = null
+        _cachedLibraries.value = null
+        _cachedItems.value = emptyMap()
+        prefs.edit()
+            .remove(KEY_CACHED_LIBRARIES)
+            .remove(KEY_CACHED_ITEMS)
+            .apply()
         Log.i(TAG, "Jellyfin disconnected")
+    }
+
+    /**
+     * Pre-fetch top-level libraries and their immediate children in the background.
+     * Called after authentication so the browse panel can display content instantly.
+     */
+    suspend fun prefetchLibraryContent() {
+        Log.i(TAG, "Prefetching library content...")
+        val libraries = getLibraries()
+        if (libraries.isEmpty()) {
+            Log.w(TAG, "Prefetch: no libraries found")
+            return
+        }
+        _cachedLibraries.value = libraries
+        Log.i(TAG, "Prefetch: cached ${libraries.size} libraries")
+
+        val items = mutableMapOf<UUID, List<JellyfinItem>>()
+        for (library in libraries) {
+            val children = getItems(library.id)
+            items[library.id] = children
+            Log.i(TAG, "Prefetch: cached ${children.size} items for '${library.name}'")
+        }
+        _cachedItems.value = items
+        saveCacheToDisk(libraries, items)
+        Log.i(TAG, "Prefetch complete: ${libraries.size} libraries, ${items.values.sumOf { it.size }} total items")
     }
 
     /** Fetch top-level library views (Movies, TV Shows, etc.). */
@@ -213,6 +267,65 @@ class JellyfinClient(private val context: Context) {
     fun getImageUrl(itemId: UUID): String? {
         val url = baseUrl ?: return null
         return "${url}/Items/$itemId/Images/Primary?maxWidth=300&quality=80&api_key=$accessToken"
+    }
+
+    private fun saveCacheToDisk(
+        libraries: List<JellyfinItem>,
+        items: Map<UUID, List<JellyfinItem>>,
+    ) {
+        try {
+            val librariesJson = JSONArray().apply {
+                libraries.forEach { put(it.toJson()) }
+            }
+            val itemsJson = JSONObject().apply {
+                items.forEach { (parentId, children) ->
+                    put(parentId.toString(), JSONArray().apply {
+                        children.forEach { put(it.toJson()) }
+                    })
+                }
+            }
+            prefs.edit()
+                .putString(KEY_CACHED_LIBRARIES, librariesJson.toString())
+                .putString(KEY_CACHED_ITEMS, itemsJson.toString())
+                .apply()
+            Log.i(TAG, "Library cache saved to disk")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save library cache", e)
+        }
+    }
+
+    private fun restoreCacheFromDisk() {
+        try {
+            val librariesStr = prefs.getString(KEY_CACHED_LIBRARIES, null)
+            val itemsStr = prefs.getString(KEY_CACHED_ITEMS, null)
+            if (librariesStr != null) {
+                val arr = JSONArray(librariesStr)
+                val libraries = (0 until arr.length()).map { JellyfinItem.fromJson(arr.getJSONObject(it)) }
+                _cachedLibraries.value = libraries
+                Log.i(TAG, "Restored ${libraries.size} libraries from disk cache")
+            }
+            if (itemsStr != null) {
+                val obj = JSONObject(itemsStr)
+                val items = mutableMapOf<UUID, List<JellyfinItem>>()
+                for (key in obj.keys()) {
+                    val arr = obj.getJSONArray(key)
+                    items[UUID.fromString(key)] = (0 until arr.length()).map {
+                        JellyfinItem.fromJson(arr.getJSONObject(it))
+                    }
+                }
+                _cachedItems.value = items
+                Log.i(TAG, "Restored ${items.values.sumOf { it.size }} items from disk cache")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to restore library cache", e)
+        }
+    }
+
+    private fun JellyfinItem.toJson() = JSONObject().apply {
+        put("id", id.toString())
+        put("name", name)
+        put("type", type.name)
+        put("isFolder", isFolder)
     }
 
     private fun BaseItemDto.toJellyfinItem() = JellyfinItem(
