@@ -48,7 +48,11 @@
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
   <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
-  <application android:allowBackup="false" android:label="Hello World">
+  <application
+    android:allowBackup="false"
+    android:label="Hello World"
+    android:networkSecurityConfig="@xml/network_security_config"
+  >
     <meta-data
       android:name="com.oculus.supportedDevices"
       android:value="quest2|questpro|quest3"

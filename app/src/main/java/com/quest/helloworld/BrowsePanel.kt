@@ -12,37 +12,45 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.meta.spatial.uiset.theme.LocalColorScheme
 import com.meta.spatial.uiset.theme.SpatialTheme
-import com.quest.helloworld.streaming.DlnaDiscovery
-import com.quest.helloworld.streaming.DlnaItem
+import com.quest.helloworld.streaming.AuthState
+import com.quest.helloworld.streaming.JellyfinClient
+import com.quest.helloworld.streaming.JellyfinItem
+import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
- * Secondary panel for browsing DLNA servers and selecting media to play.
+ * Secondary panel for connecting to a Jellyfin server and browsing media.
+ * Uses Quick Connect for authentication — no typing passwords in VR.
  */
 @Composable
 fun BrowsePanel(
-    discovery: DlnaDiscovery,
-    onMediaSelected: (String) -> Unit,
+    jellyfinClient: JellyfinClient,
+    onMediaSelected: (UUID) -> Unit,
 ) {
-    val servers by discovery.servers.collectAsState()
-    val isDiscovering by discovery.isDiscovering.collectAsState()
-
-    // Navigation state: null = server list, non-null = browsing inside a server/folder
-    var currentItems by remember { mutableStateOf<List<DlnaItem>?>(null) }
-    var breadcrumb by remember { mutableStateOf<List<String>>(emptyList()) }
+    val authState by jellyfinClient.authState.collectAsState()
+    val errorMessage by jellyfinClient.errorMessage.collectAsState()
+    // Scope at this level survives child composable transitions (prompt -> waiting -> browser)
+    val scope = rememberCoroutineScope()
 
     SpatialTheme(colorScheme = draculaSpatialColorScheme()) {
         Column(
@@ -52,97 +60,241 @@ fun BrowsePanel(
                 .background(brush = LocalColorScheme.current.panel)
                 .padding(24.dp),
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = if (currentItems == null) "DLNA Servers" else breadcrumb.lastOrNull() ?: "Browse",
-                    style = SpatialTheme.typography.headline2Strong.copy(
-                        color = SpatialTheme.colorScheme.primaryAlphaBackground,
-                    ),
-                )
-                if (isDiscovering && currentItems == null) {
-                    Text(
-                        text = "Scanning...",
-                        style = SpatialTheme.typography.body2.copy(
-                            color = SpatialTheme.colorScheme.secondaryAlphaBackground,
-                        ),
+            when (authState) {
+                AuthState.DISCONNECTED, AuthState.ERROR -> {
+                    QuickConnectPrompt(
+                        onConnect = {
+                            scope.launch { jellyfinClient.startQuickConnect() }
+                        },
+                        errorMessage = if (authState == AuthState.ERROR) errorMessage else null,
+                    )
+                }
+                AuthState.QUICK_CONNECT_PENDING -> {
+                    QuickConnectWaiting(jellyfinClient = jellyfinClient)
+                }
+                AuthState.AUTHENTICATED -> {
+                    LibraryBrowser(
+                        jellyfinClient = jellyfinClient,
+                        onMediaSelected = onMediaSelected,
                     )
                 }
             }
+        }
+    }
+}
 
-            // Back button when browsing
-            if (currentItems != null) {
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(
-                    text = "< Back",
-                    style = SpatialTheme.typography.body1.copy(
-                        color = DraculaCyan,
-                    ),
-                    modifier = Modifier.clickable {
-                        currentItems = null
-                        breadcrumb = emptyList()
-                    },
-                )
-            }
+@Composable
+private fun QuickConnectPrompt(
+    onConnect: () -> Unit,
+    errorMessage: String?,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "JellyQuest",
+            style = SpatialTheme.typography.headline1Strong.copy(
+                color = SpatialTheme.colorScheme.primaryAlphaBackground,
+            ),
+        )
+
+        Spacer(modifier = Modifier.size(8.dp))
+
+        Text(
+            text = JellyfinClient.DEFAULT_SERVER_URL,
+            style = SpatialTheme.typography.body2.copy(
+                color = SpatialTheme.colorScheme.secondaryAlphaBackground,
+            ),
+        )
+
+        Spacer(modifier = Modifier.size(24.dp))
+
+        Button(
+            onClick = onConnect,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = DraculaGreen,
+                contentColor = Color.Black,
+            ),
+        ) {
+            Text("Connect with Quick Connect")
+        }
+
+        if (errorMessage != null) {
+            Spacer(modifier = Modifier.size(16.dp))
+            Text(
+                text = errorMessage,
+                style = SpatialTheme.typography.body2.copy(
+                    color = Color(0xFFFF5555),
+                ),
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickConnectWaiting(jellyfinClient: JellyfinClient) {
+    val code by jellyfinClient.quickConnectCode.collectAsState()
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "Quick Connect",
+            style = SpatialTheme.typography.headline2Strong.copy(
+                color = SpatialTheme.colorScheme.primaryAlphaBackground,
+            ),
+        )
+
+        Spacer(modifier = Modifier.size(16.dp))
+
+        if (code != null) {
+            Text(
+                text = "Enter this code in your Jellyfin dashboard:",
+                style = SpatialTheme.typography.body1.copy(
+                    color = SpatialTheme.colorScheme.secondaryAlphaBackground,
+                ),
+                textAlign = TextAlign.Center,
+            )
 
             Spacer(modifier = Modifier.size(16.dp))
 
-            if (currentItems == null) {
-                // Server list
-                if (servers.isEmpty() && !isDiscovering) {
-                    Text(
-                        text = "No DLNA servers found on network",
-                        style = SpatialTheme.typography.body1.copy(
-                            color = SpatialTheme.colorScheme.secondaryAlphaBackground,
-                        ),
-                    )
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(servers) { server ->
-                            BrowseListItem(
-                                title = server.name,
-                                isFolder = true,
-                                onClick = {
-                                    val items = discovery.browse(server.media)
-                                    currentItems = items
-                                    breadcrumb = listOf(server.name)
-                                },
-                            )
-                        }
+            // Large code display
+            Text(
+                text = code!!,
+                style = SpatialTheme.typography.headline1Strong.copy(
+                    color = DraculaGreen,
+                    letterSpacing = androidx.compose.ui.unit.TextUnit(8f, androidx.compose.ui.unit.TextUnitType.Sp),
+                ),
+            )
+
+            Spacer(modifier = Modifier.size(24.dp))
+
+            Text(
+                text = "Waiting for authorization...",
+                style = SpatialTheme.typography.body2.copy(
+                    color = SpatialTheme.colorScheme.secondaryAlphaBackground,
+                ),
+            )
+        } else {
+            Text(
+                text = "Connecting to server...",
+                style = SpatialTheme.typography.body1.copy(
+                    color = SpatialTheme.colorScheme.secondaryAlphaBackground,
+                ),
+            )
+        }
+
+        Spacer(modifier = Modifier.size(16.dp))
+
+        Text(
+            text = "Cancel",
+            style = SpatialTheme.typography.body2.copy(color = Color(0xFFFF5555)),
+            modifier = Modifier.clickable { jellyfinClient.disconnect() },
+        )
+    }
+}
+
+@Composable
+private fun LibraryBrowser(
+    jellyfinClient: JellyfinClient,
+    onMediaSelected: (UUID) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var currentItems by remember { mutableStateOf<List<JellyfinItem>?>(null) }
+    var breadcrumb by remember { mutableStateOf<List<Pair<String, UUID?>>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    // Load libraries on first display
+    LaunchedEffect(Unit) {
+        isLoading = true
+        currentItems = jellyfinClient.getLibraries()
+        isLoading = false
+    }
+
+    // Header
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = breadcrumb.lastOrNull()?.first ?: "Libraries",
+            style = SpatialTheme.typography.headline2Strong.copy(
+                color = SpatialTheme.colorScheme.primaryAlphaBackground,
+            ),
+        )
+        Text(
+            text = "Disconnect",
+            style = SpatialTheme.typography.body2.copy(color = Color(0xFFFF5555)),
+            modifier = Modifier.clickable { jellyfinClient.disconnect() },
+        )
+    }
+
+    // Back button when navigating
+    if (breadcrumb.isNotEmpty()) {
+        Spacer(modifier = Modifier.size(8.dp))
+        Text(
+            text = "< Back",
+            style = SpatialTheme.typography.body1.copy(color = DraculaCyan),
+            modifier = Modifier.clickable {
+                isLoading = true
+                scope.launch {
+                    breadcrumb = breadcrumb.dropLast(1)
+                    val parentId = breadcrumb.lastOrNull()?.second
+                    currentItems = if (parentId != null) {
+                        jellyfinClient.getItems(parentId)
+                    } else {
+                        jellyfinClient.getLibraries()
                     }
+                    isLoading = false
                 }
-            } else {
-                // Folder/media list
-                val items = currentItems!!
-                if (items.isEmpty()) {
-                    Text(
-                        text = "Empty folder",
-                        style = SpatialTheme.typography.body1.copy(
-                            color = SpatialTheme.colorScheme.secondaryAlphaBackground,
-                        ),
+            },
+        )
+    }
+
+    Spacer(modifier = Modifier.size(16.dp))
+
+    if (isLoading) {
+        Text(
+            text = "Loading...",
+            style = SpatialTheme.typography.body1.copy(
+                color = SpatialTheme.colorScheme.secondaryAlphaBackground,
+            ),
+        )
+    } else {
+        val items = currentItems ?: emptyList()
+        if (items.isEmpty()) {
+            Text(
+                text = "No items found",
+                style = SpatialTheme.typography.body1.copy(
+                    color = SpatialTheme.colorScheme.secondaryAlphaBackground,
+                ),
+            )
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(items) { item ->
+                    BrowseListItem(
+                        title = item.name,
+                        isFolder = item.isFolder,
+                        onClick = {
+                            if (item.isFolder) {
+                                isLoading = true
+                                scope.launch {
+                                    val children = jellyfinClient.getItems(item.id)
+                                    currentItems = children
+                                    breadcrumb = breadcrumb + (item.name to item.id)
+                                    isLoading = false
+                                }
+                            } else {
+                                onMediaSelected(item.id)
+                            }
+                        },
                     )
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(items) { item ->
-                            BrowseListItem(
-                                title = item.title,
-                                isFolder = item.isFolder,
-                                onClick = {
-                                    if (item.isFolder) {
-                                        val children = discovery.browse(item.media)
-                                        currentItems = children
-                                        breadcrumb = breadcrumb + item.title
-                                    } else {
-                                        onMediaSelected(item.uri.toString())
-                                    }
-                                },
-                            )
-                        }
-                    }
                 }
             }
         }

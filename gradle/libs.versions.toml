@@ -8,7 +8,8 @@ junitVersion = "1.2.1"
 espressoCore = "3.6.1"
 composeActivity = "1.9.2"
 composeBom = "2024.09.03"
-libvlc = "3.6.2"
+jellyfin = "1.5.0"
+media3 = "1.4.1"
 
 [libraries]
 # Meta Spatial SDK Libraries
@@ -38,8 +39,16 @@ androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 
-# VLC
-libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
+# Jellyfin SDK
+jellyfin-core = { group = "org.jellyfin.sdk", name = "jellyfin-core", version.ref = "jellyfin" }
+
+# ExoPlayer (Media3)
+media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-exoplayer-dash = { group = "androidx.media3", name = "media3-exoplayer-dash", version.ref = "media3" }
+media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
+
+# Spatial Audio
+meta-spatial-sdk-spatialaudio = { group = "com.meta.spatial", name = "meta-spatial-sdk-spatialaudio", version.ref = "spatialsdk" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

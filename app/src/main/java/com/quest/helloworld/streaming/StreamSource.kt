@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Abstraction for media/streaming backends that render to a Surface.
  *
- * Implementations: DlnaSource (VLC/DLNA), RtspSource (VLC/RTSP), VncSource (LibVNCClient).
+ * Implementations: ExoPlayerSource (Jellyfin/HTTP), RtspSource (future), VncSource (future).
  */
 interface StreamSource {
     val connectionState: StateFlow<ConnectionState>

@@ -69,8 +69,16 @@ dependencies {
   implementation(libs.meta.spatial.sdk.isdk)
   implementation(libs.meta.spatial.sdk.uiset)
 
-  // VLC
-  implementation(libs.libvlc.all)
+  // Jellyfin SDK
+  implementation(libs.jellyfin.core)
+
+  // ExoPlayer (Media3)
+  implementation(libs.media3.exoplayer)
+  implementation(libs.media3.exoplayer.dash)
+  implementation(libs.media3.ui)
+
+  // Spatial Audio
+  implementation(libs.meta.spatial.sdk.spatialaudio)
 
   // Debug tools
   implementation(libs.meta.spatial.sdk.castinputforward)

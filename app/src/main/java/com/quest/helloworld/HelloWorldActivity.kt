@@ -1,7 +1,5 @@
 package com.quest.helloworld
 
-import android.content.Context
-import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.util.Log
 import androidx.compose.runtime.mutableIntStateOf
@@ -31,9 +29,8 @@ import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.UIPanelSettings
 import com.meta.spatial.toolkit.createPanelEntity
 import com.meta.spatial.vr.VRFeature
-import com.quest.helloworld.streaming.DlnaDiscovery
-import com.quest.helloworld.streaming.DlnaSource
-import org.videolan.libvlc.LibVLC
+import com.quest.helloworld.streaming.ExoPlayerSource
+import com.quest.helloworld.streaming.JellyfinClient
 
 data class ScreenPreset(val label: String, val widthM: Float, val heightM: Float, val minDistanceIndex: Int = 0)
 data class DistancePreset(val label: String, val distanceM: Float)
@@ -86,11 +83,9 @@ class HelloWorldActivity : AppSystemActivity() {
   private var browsePanelEntity: Entity? = null
   val browsePanelVisible = mutableStateOf(false)
 
-  // VLC / DLNA
-  lateinit var libVLC: LibVLC
-  lateinit var dlnaSource: DlnaSource
-  lateinit var dlnaDiscovery: DlnaDiscovery
-  private var multicastLock: WifiManager.MulticastLock? = null
+  // Jellyfin + ExoPlayer
+  lateinit var exoPlayerSource: ExoPlayerSource
+  lateinit var jellyfinClient: JellyfinClient
 
   // Anchor: the user's position and facing direction, captured once at startup.
   // All panel placement is relative to this fixed point.
@@ -117,29 +112,14 @@ class HelloWorldActivity : AppSystemActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    // Acquire multicast lock so UPnP/SSDP discovery packets aren't dropped
-    try {
-      val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-      multicastLock = wifiManager.createMulticastLock("dlna_discovery").apply {
-        setReferenceCounted(true)
-        acquire()
-      }
-      Log.i(TAG, "MulticastLock acquired: ${multicastLock?.isHeld}")
-    } catch (e: Exception) {
-      Log.e(TAG, "Failed to acquire MulticastLock", e)
-    }
-
-    libVLC = LibVLC(this, arrayListOf("--no-drop-late-frames", "--no-skip-frames"))
-    dlnaSource = DlnaSource(libVLC)
-    dlnaDiscovery = DlnaDiscovery(libVLC)
-    Log.i(TAG, "LibVLC and DLNA initialized")
+    exoPlayerSource = ExoPlayerSource(this)
+    jellyfinClient = JellyfinClient(this)
+    Log.i(TAG, "ExoPlayer and Jellyfin client initialized")
   }
 
   override fun onDestroy() {
-    dlnaSource.disconnect()
-    dlnaDiscovery.stop()
-    libVLC.release()
-    multicastLock?.let { if (it.isHeld) it.release() }
+    exoPlayerSource.disconnect()
+    exoPlayerSource.release()
     super.onDestroy()
   }
 
@@ -200,7 +180,6 @@ class HelloWorldActivity : AppSystemActivity() {
             onBrowseToggle = {
               browsePanelVisible.value = !browsePanelVisible.value
               if (browsePanelVisible.value) {
-                dlnaDiscovery.start()
                 spawnBrowsePanel()
               } else {
                 browsePanelEntity?.destroy()
@@ -208,7 +187,7 @@ class HelloWorldActivity : AppSystemActivity() {
               }
             },
             onPlayPauseToggle = {
-              dlnaSource.togglePlayPause()
+              exoPlayerSource.togglePlayPause()
             },
         )
     )
@@ -291,7 +270,7 @@ class HelloWorldActivity : AppSystemActivity() {
               ComposeView(ctx).apply {
                 setContent {
                   MonitorPanel(
-                      streamSource = dlnaSource,
+                      streamSource = exoPlayerSource,
                       sizeIndex = currentSizeIndex,
                       distanceIndex = currentDistanceIndex,
                       heightIndex = currentHeightIndex,
@@ -313,16 +292,17 @@ class HelloWorldActivity : AppSystemActivity() {
               )
             },
         ),
-        // DLNA browse panel (shown/hidden via A button)
+        // Jellyfin browse panel (shown/hidden via A button)
         ComposeViewPanelRegistration(
             R.id.browse_panel,
             composeViewCreator = { _, ctx ->
               ComposeView(ctx).apply {
                 setContent {
                   BrowsePanel(
-                      discovery = dlnaDiscovery,
-                      onMediaSelected = { uri ->
-                        dlnaSource.connect(uri)
+                      jellyfinClient = jellyfinClient,
+                      onMediaSelected = { itemId ->
+                        val url = jellyfinClient.getStreamUrl(itemId)
+                        exoPlayerSource.connect(url)
                         // Hide browse panel after selecting media
                         browsePanelVisible.value = false
                         browsePanelEntity?.destroy()
