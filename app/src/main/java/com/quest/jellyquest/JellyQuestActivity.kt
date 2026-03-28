@@ -83,13 +83,9 @@ class JellyQuestActivity : AppSystemActivity() {
   lateinit var exoPlayerSource: ExoPlayerSource
   lateinit var jellyfinClient: JellyfinClient
 
-  // Anchor: the user's position and facing direction, captured once at startup.
-  // All panel placement is relative to this fixed point.
-  // SDK coordinate system: +Z = forward, +X = right, +Y = up
-  private var anchorPosition = Vector3(0f, 0f, 0f)
-  private var anchorForward = Vector3(0f, 0f, 1f)
-  private var anchorRotation = Quaternion(0f, 0f, 0f)
-  private var anchorCaptured = false
+  // Anchor: immutable snapshot of the user's position and facing direction.
+  // Captured at startup and on recenter. All placement is relative to this point.
+  private var anchor: Anchor? = null
 
   override fun registerFeatures(): List<SpatialFeature> {
     val features =
@@ -139,13 +135,12 @@ class JellyQuestActivity : AppSystemActivity() {
 
     scene.setViewOrigin(0.0f, 0.0f, 0.0f)
 
-    spawnEnvironment()
-
     // Try to capture the anchor now; if head tracking isn't ready yet,
     // the AnchorCaptureSystem will keep trying each frame until it succeeds.
     if (!captureAnchor()) {
       systemManager.registerSystem(AnchorCaptureSystem(this))
     } else {
+      spawnEnvironment()
       spawnPanel()
       // Auto-open browse panel if library cache is available
       if (jellyfinClient.cachedLibraries.value != null) {
@@ -183,31 +178,12 @@ class JellyQuestActivity : AppSystemActivity() {
   }
 
   fun captureAnchor(): Boolean {
-    val headPose =
-        Query.where { has(AvatarAttachment.id) }
-            .eval()
-            .filter { it.isLocal() && it.getComponent<AvatarAttachment>().type == "head" }
-            .firstOrNull()
-            ?.getComponent<Transform>()
-            ?.transform
-
-    if (headPose == null || headPose == Pose()) {
-      Log.d(TAG, "captureAnchor: headPose=${headPose?.t} (null=${headPose == null}, default=${headPose == Pose()})")
-      return false
-    }
-
-    anchorPosition = Vector3(headPose.t.x, 0f, headPose.t.z)
-    // SDK: +Z is forward. Pose.forward() = headPose.q * Vector3(0,0,1)
-    val forward = headPose.forward()
-    forward.y = 0f
-    anchorForward = forward.normalize()
-    anchorRotation = Quaternion.lookRotationAroundY(anchorForward)
-    anchorCaptured = true
-    Log.i(TAG, "Anchor captured: pos=$anchorPosition fwd=$anchorForward rot=$anchorRotation headPose=${headPose.t}")
+    anchor = Anchor.capture() ?: return false
     return true
   }
 
   fun spawnPanelFromSystem() {
+    spawnEnvironment()
     spawnPanel()
     // Auto-open browse panel if library cache is available
     if (jellyfinClient.cachedLibraries.value != null) {
@@ -217,17 +193,18 @@ class JellyQuestActivity : AppSystemActivity() {
   }
 
   private fun spawnPanel() {
+    val a = anchor ?: return
     val screen = currentScreen.value
 
     // Place the panel along the anchored forward direction at the selected distance
-    val position = anchorPosition + anchorForward * screen.distanceM
+    val position = a.position + a.forward * screen.distanceM
     position.y = screen.screenCenterY
 
-    Log.i(TAG, "Spawning panel at pos=$position rot=$anchorRotation dist=${screen.distanceM}m height=${screen.screenCenterY}m")
+    Log.i(TAG, "Spawning panel at pos=$position rot=${a.rotation} dist=${screen.distanceM}m height=${screen.screenCenterY}m")
     panelEntity =
         Entity.createPanelEntity(
             R.id.hello_panel,
-            Transform(Pose(position, anchorRotation)),
+            Transform(Pose(position, a.rotation)),
         )
   }
 
@@ -238,6 +215,7 @@ class JellyQuestActivity : AppSystemActivity() {
   }
 
   private fun spawnBrowsePanel() {
+    val a = anchor ?: return
     Log.i(TAG, "spawnBrowsePanel: creating entity")
     browsePanelEntity?.destroy()
 
@@ -245,13 +223,12 @@ class JellyQuestActivity : AppSystemActivity() {
     // Y uses seated eye height (~1.1m) plus riser elevation, not live head pose
     // (which may not reflect setViewOrigin changes immediately).
     val seatedEyeHeight = 1.1f
-    val leftDir = Vector3(-anchorForward.z, 0f, anchorForward.x).normalize()
-    val position = anchorPosition + anchorForward * 0.6f + leftDir * 0.4f
+    val position = a.position + a.forward * 0.6f + a.left * 0.4f
     position.y = seatedEyeHeight + currentRiserHeightM - 0.2f
 
     // Face toward anchor position (not current gaze) with tablet tilt
-    val dx = position.x - anchorPosition.x
-    val dz = position.z - anchorPosition.z
+    val dx = position.x - a.position.x
+    val dz = position.z - a.position.z
     val yawDeg = Math.toDegrees(Math.atan2(dx.toDouble(), dz.toDouble())).toFloat()
     val panelRotation = Quaternion(15f, yawDeg, 0f)
 
@@ -270,8 +247,11 @@ class JellyQuestActivity : AppSystemActivity() {
   }
 
   private fun spawnEnvironment() {
+    val a = anchor ?: return
     skyboxEntity?.destroy()
     floorEntity?.destroy()
+
+    val envPos = Vector3(a.position.x, 0f, a.position.z)
 
     // Skybox: near-black sphere centered on the user
     skyboxEntity = Entity.create(listOf(
@@ -280,7 +260,7 @@ class JellyQuestActivity : AppSystemActivity() {
           baseColor = Color4(0.05f, 0.05f, 0.07f, 1f)
           unlit = true
         },
-        Transform(Pose(Vector3(anchorPosition.x, 0f, anchorPosition.z))),
+        Transform(Pose(envPos)),
     ))
 
     // Floor: dark charcoal ground plane (30m x 30m, 1cm thick) centered on the user
@@ -291,7 +271,7 @@ class JellyQuestActivity : AppSystemActivity() {
           baseColor = Color4(0.08f, 0.08f, 0.08f, 1f)
           unlit = true
         },
-        Transform(Pose(Vector3(anchorPosition.x, 0f, anchorPosition.z))),
+        Transform(Pose(envPos)),
     ))
   }
 
@@ -329,6 +309,7 @@ class JellyQuestActivity : AppSystemActivity() {
   }
 
   private fun logScreenPosition() {
+    val a = anchor ?: return
     val headPose =
         Query.where { has(AvatarAttachment.id) }
             .eval()
@@ -338,7 +319,7 @@ class JellyQuestActivity : AppSystemActivity() {
             ?.transform
 
     val screen = currentScreen.value
-    val screenPos = anchorPosition + anchorForward * screen.distanceM
+    val screenPos = a.position + a.forward * screen.distanceM
     screenPos.y = screen.screenCenterY
 
     val headPos = headPose?.t ?: Vector3(0f, 0f, 0f)
