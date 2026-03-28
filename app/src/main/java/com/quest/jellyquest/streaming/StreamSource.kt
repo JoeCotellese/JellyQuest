@@ -28,6 +28,9 @@ interface StreamSource {
     fun play() {}
     fun pause() {}
     fun togglePlayPause() {}
+    fun seekForward(seconds: Long = 10) {}
+    fun seekBackward(seconds: Long = 10) {}
+    fun stop() {}
 }
 
 enum class ConnectionState {

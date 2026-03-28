@@ -96,9 +96,7 @@ class JellyQuestActivity : AppSystemActivity() {
 
   private var panelEntity: Entity? = null
   private var browsePanelEntity: Entity? = null
-  private var theaterPickerEntity: Entity? = null
   val browsePanelVisible = mutableStateOf(false)
-  val theaterPickerVisible = mutableStateOf(false)
 
   // Jellyfin + ExoPlayer
   lateinit var exoPlayerSource: ExoPlayerSource
@@ -176,11 +174,10 @@ class JellyQuestActivity : AppSystemActivity() {
     }
 
     systemManager.registerSystem(
-        ScreenSizeControlSystem(
+        ControllerInputSystem(
             onBrowseToggle = {
               Log.i(TAG, "onBrowseToggle: visible=${browsePanelVisible.value}")
               if (!browsePanelVisible.value) {
-                dismissTheaterPicker()
                 browsePanelVisible.value = true
                 spawnBrowsePanel()
               } else {
@@ -190,16 +187,16 @@ class JellyQuestActivity : AppSystemActivity() {
             onPlayPauseToggle = {
               exoPlayerSource.togglePlayPause()
             },
-            onTheaterToggle = {
-              Log.i(TAG, "onTheaterToggle: visible=${theaterPickerVisible.value}")
-              if (!theaterPickerVisible.value) {
-                dismissBrowsePanel()
-                theaterPickerVisible.value = true
-                spawnTheaterPicker()
-              } else {
-                dismissTheaterPicker()
+            onStop = {
+              exoPlayerSource.stop()
+              // Auto-show browse panel for next selection
+              if (!browsePanelVisible.value) {
+                browsePanelVisible.value = true
+                spawnBrowsePanel()
               }
             },
+            onSeekForward = { exoPlayerSource.seekForward() },
+            onSeekBackward = { exoPlayerSource.seekBackward() },
         )
     )
   }
@@ -263,15 +260,25 @@ class JellyQuestActivity : AppSystemActivity() {
     Log.i(TAG, "spawnBrowsePanel: creating entity")
     browsePanelEntity?.destroy()
 
-    // Place browse panel within arms reach, to the left of the user
+    // Place browse panel within arms reach, offset to the left.
+    // Meta recommends ~70cm for controller interaction, slightly below line of sight.
     val leftDir = Vector3(-anchorForward.z, 0f, anchorForward.x).normalize()
-    val position = anchorPosition + anchorForward * 0.7f + leftDir * 0.6f
-    position.y = 1.0f  // Seated eye level
+    val position = anchorPosition + anchorForward * 0.6f + leftDir * 0.4f
+    position.y = 0.9f  // Slightly below seated eye level, like a tablet in your lap
+
+    // Compute yaw angle (degrees) to face panel content toward the user.
+    // atan2 gives the angle of the awayFromUser vector; panel content is on -Z face,
+    // so we use the direction from user to panel for the yaw.
+    val dx = position.x - anchorPosition.x
+    val dz = position.z - anchorPosition.z
+    val yawDeg = Math.toDegrees(Math.atan2(dx.toDouble(), dz.toDouble())).toFloat()
+    // Quaternion(pitch, yaw, roll) in degrees: tilt top away 15°
+    val panelRotation = Quaternion(15f, yawDeg, 0f)
 
     browsePanelEntity =
         Entity.createPanelEntity(
             R.id.browse_panel,
-            Transform(Pose(position, anchorRotation)),
+            Transform(Pose(position, panelRotation)),
         )
   }
 
@@ -280,30 +287,6 @@ class JellyQuestActivity : AppSystemActivity() {
     browsePanelVisible.value = false
     browsePanelEntity?.destroy()
     browsePanelEntity = null
-  }
-
-  private fun spawnTheaterPicker() {
-    Log.i(TAG, "spawnTheaterPicker: creating entity")
-    theaterPickerEntity?.destroy()
-
-    // Place theater picker to the right of the user, within arms reach
-    val rightDir = Vector3(anchorForward.z, 0f, -anchorForward.x).normalize()
-    val position = anchorPosition + anchorForward * 0.7f + rightDir * 0.6f
-    position.y = 1.0f  // Seated eye level, slightly below
-
-    Log.i(TAG, "Spawning theater picker at pos=$position")
-    theaterPickerEntity =
-        Entity.createPanelEntity(
-            R.id.theater_picker_panel,
-            Transform(Pose(position, anchorRotation)),
-        )
-  }
-
-  private fun dismissTheaterPicker() {
-    Log.i(TAG, "dismissTheaterPicker: visible=${theaterPickerVisible.value}, entity=${theaterPickerEntity?.id}")
-    theaterPickerVisible.value = false
-    theaterPickerEntity?.destroy()
-    theaterPickerEntity = null
   }
 
   private fun spawnEnvironment() {
@@ -421,46 +404,20 @@ class JellyQuestActivity : AppSystemActivity() {
                         browsePanelEntity?.destroy()
                         browsePanelEntity = null
                       },
-                  )
-                }
-              }
-            },
-            settingsCreator = {
-              UIPanelSettings(
-                  shape = QuadShapeOptions(width = 0.8f, height = 1.0f),
-                  style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
-                  display = DpPerMeterDisplayOptions(),
-                  input = PanelInputOptions(
-                      ButtonBits.ButtonTriggerL or ButtonBits.ButtonTriggerR
-                  ),
-              )
-            },
-        ),
-        // Theater experience picker (shown/hidden via X button)
-        ComposeViewPanelRegistration(
-            R.id.theater_picker_panel,
-            composeViewCreator = { _, ctx ->
-              ComposeView(ctx).apply {
-                setContent {
-                  TheaterPickerPanel(
                       currentSizeIndex = currentSizeIndex.intValue,
                       currentDistanceIndex = currentDistanceIndex.intValue,
                       onTheaterSelected = { sizeIdx, distIdx, screenHeightM ->
                         applyTheaterPreset(sizeIdx, distIdx, screenHeightM)
                       },
-                      onDismiss = {
-                        Log.i(TAG, "TheaterPicker onDismiss callback fired")
-                        dismissTheaterPicker()
-                      },
                   )
                 }
               }
             },
             settingsCreator = {
               UIPanelSettings(
-                  shape = QuadShapeOptions(width = 0.9f, height = 0.8f),
+                  shape = QuadShapeOptions(width = 0.5f, height = 0.65f),
                   style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
-                  display = DpPerMeterDisplayOptions(),
+                  display = DpPerMeterDisplayOptions(dpPerMeter = 800f),
                   input = PanelInputOptions(
                       ButtonBits.ButtonTriggerL or ButtonBits.ButtonTriggerR
                   ),

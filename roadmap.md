@@ -294,7 +294,7 @@ This wires ExoPlayer's audio output through Meta's spatial audio renderer, posit
 ```
 Controller Input
        |
-ScreenSizeControlSystem
+ControllerInputSystem
        |
        v
 JellyQuestActivity
@@ -324,7 +324,7 @@ MonitorPanel  BrowsePanel  AudioSessionId
 | `streaming/StreamSource.kt` | Unchanged |
 | `MonitorPanel.kt` | Unchanged |
 | `HelloPanel.kt` | Unchanged |
-| `ScreenSizeControlSystem.kt` | Unchanged |
+| `ControllerInputSystem.kt` | Unchanged |
 | `AnchorCaptureSystem.kt` | Unchanged |
 | `Theme.kt` | Unchanged |
 | `AndroidManifest.xml` | Unchanged |
