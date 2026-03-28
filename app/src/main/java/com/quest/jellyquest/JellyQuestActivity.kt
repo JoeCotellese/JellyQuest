@@ -4,6 +4,8 @@ import android.os.Bundle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import android.util.Log
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.net.toUri
@@ -14,7 +16,6 @@ import com.meta.spatial.core.Color4
 import com.meta.spatial.core.Entity
 import com.meta.spatial.core.Pose
 import com.meta.spatial.core.Query
-import com.meta.spatial.core.Quaternion
 import com.meta.spatial.core.SpatialFeature
 import com.meta.spatial.core.Vector3
 import com.meta.spatial.toolkit.AvatarAttachment
@@ -43,25 +44,20 @@ import com.quest.jellyquest.streaming.ExoPlayerSource
 import com.quest.jellyquest.streaming.JellyfinClient
 import kotlinx.coroutines.launch
 
-/** Current screen configuration — updated when a theater preset is applied. */
-data class ScreenConfig(
-    val label: String,
-    val widthM: Float,
-    val heightM: Float,
-    val distanceM: Float,
-    val screenBottomM: Float = STAGE_HEIGHT,
-) {
-  val screenCenterY: Float get() = screenBottomM + (heightM / 2f)
-}
-
-// Default: PLF middle seat
-val DEFAULT_SCREEN = ScreenConfig(
-    label = "Premium Large Format",
-    widthM = 14.0f,
-    heightM = 5.86f,
-    distanceM = 12.0f,
-)
-
+/**
+ * Orchestrator for the VR theater experience. Owns entity lifecycle, event wiring,
+ * and SDK panel registration. Delegates ALL positioning math to layout classes:
+ *
+ *  - [TheaterLayout] — world-anchored objects (screen, environment). Placed once
+ *    in world space, fixed unless the anchor resets on recenter.
+ *  - [ViewerLayout] — viewer-relative objects (browse panel). Positioned relative
+ *    to the user's seated location, follows seat elevation changes.
+ *
+ * [Anchor] captures the user's position and facing direction at startup/recenter.
+ * [TheaterState] is the single source of truth for screen config + riser height.
+ *
+ * See issues/002-theater-positioning-architecture.md for the full design rationale.
+ */
 class JellyQuestActivity : AppSystemActivity() {
 
   companion object {
@@ -70,10 +66,11 @@ class JellyQuestActivity : AppSystemActivity() {
 
   private val activityScope = CoroutineScope(Dispatchers.Main)
 
-  val currentScreen = mutableStateOf(DEFAULT_SCREEN)
-  private var currentRiserHeightM = 0f
+  val theaterState = mutableStateOf(TheaterState())
+  // Derived state for Compose panels that only need screen config
+  val currentScreen: State<ScreenConfig> get() = derivedStateOf { theaterState.value.screen }
 
-  private var panelEntity: Entity? = null
+  private var screenEntity: Entity? = null
   private var browsePanelEntity: Entity? = null
   val browsePanelVisible = mutableStateOf(false)
   private var skyboxEntity: Entity? = null
@@ -83,13 +80,9 @@ class JellyQuestActivity : AppSystemActivity() {
   lateinit var exoPlayerSource: ExoPlayerSource
   lateinit var jellyfinClient: JellyfinClient
 
-  // Anchor: the user's position and facing direction, captured once at startup.
-  // All panel placement is relative to this fixed point.
-  // SDK coordinate system: +Z = forward, +X = right, +Y = up
-  private var anchorPosition = Vector3(0f, 0f, 0f)
-  private var anchorForward = Vector3(0f, 0f, 1f)
-  private var anchorRotation = Quaternion(0f, 0f, 0f)
-  private var anchorCaptured = false
+  // Anchor: immutable snapshot of the user's position and facing direction.
+  // Captured at startup and on recenter. All placement is relative to this point.
+  private var anchor: Anchor? = null
 
   override fun registerFeatures(): List<SpatialFeature> {
     val features =
@@ -139,14 +132,13 @@ class JellyQuestActivity : AppSystemActivity() {
 
     scene.setViewOrigin(0.0f, 0.0f, 0.0f)
 
-    spawnEnvironment()
-
     // Try to capture the anchor now; if head tracking isn't ready yet,
     // the AnchorCaptureSystem will keep trying each frame until it succeeds.
     if (!captureAnchor()) {
       systemManager.registerSystem(AnchorCaptureSystem(this))
     } else {
-      spawnPanel()
+      spawnEnvironment()
+      spawnScreen()
       // Auto-open browse panel if library cache is available
       if (jellyfinClient.cachedLibraries.value != null) {
         browsePanelVisible.value = true
@@ -183,32 +175,13 @@ class JellyQuestActivity : AppSystemActivity() {
   }
 
   fun captureAnchor(): Boolean {
-    val headPose =
-        Query.where { has(AvatarAttachment.id) }
-            .eval()
-            .filter { it.isLocal() && it.getComponent<AvatarAttachment>().type == "head" }
-            .firstOrNull()
-            ?.getComponent<Transform>()
-            ?.transform
-
-    if (headPose == null || headPose == Pose()) {
-      Log.d(TAG, "captureAnchor: headPose=${headPose?.t} (null=${headPose == null}, default=${headPose == Pose()})")
-      return false
-    }
-
-    anchorPosition = Vector3(headPose.t.x, 0f, headPose.t.z)
-    // SDK: +Z is forward. Pose.forward() = headPose.q * Vector3(0,0,1)
-    val forward = headPose.forward()
-    forward.y = 0f
-    anchorForward = forward.normalize()
-    anchorRotation = Quaternion.lookRotationAroundY(anchorForward)
-    anchorCaptured = true
-    Log.i(TAG, "Anchor captured: pos=$anchorPosition fwd=$anchorForward rot=$anchorRotation headPose=${headPose.t}")
+    anchor = Anchor.capture() ?: return false
     return true
   }
 
-  fun spawnPanelFromSystem() {
-    spawnPanel()
+  fun spawnScreenFromSystem() {
+    spawnEnvironment()
+    spawnScreen()
     // Auto-open browse panel if library cache is available
     if (jellyfinClient.cachedLibraries.value != null) {
       browsePanelVisible.value = true
@@ -216,49 +189,35 @@ class JellyQuestActivity : AppSystemActivity() {
     }
   }
 
-  private fun spawnPanel() {
-    val screen = currentScreen.value
+  private fun spawnScreen() {
+    val a = anchor ?: return
+    val screen = theaterState.value.screen
+    val pose = TheaterLayout.screenPose(a, screen)
 
-    // Place the panel along the anchored forward direction at the selected distance
-    val position = anchorPosition + anchorForward * screen.distanceM
-    position.y = screen.screenCenterY
-
-    Log.i(TAG, "Spawning panel at pos=$position rot=$anchorRotation dist=${screen.distanceM}m height=${screen.screenCenterY}m")
-    panelEntity =
+    Log.i(TAG, "Spawning screen at pos=${pose.t} rot=${pose.q} dist=${screen.distanceM}m height=${screen.screenCenterY}m")
+    screenEntity =
         Entity.createPanelEntity(
-            R.id.hello_panel,
-            Transform(Pose(position, anchorRotation)),
+            R.id.screen_panel,
+            Transform(pose),
         )
   }
 
-  private fun respawnPanel() {
-    panelEntity?.destroy()
-    panelEntity = null
-    spawnPanel()
+  private fun respawnScreen() {
+    screenEntity?.destroy()
+    screenEntity = null
+    spawnScreen()
   }
 
   private fun spawnBrowsePanel() {
+    val a = anchor ?: return
     Log.i(TAG, "spawnBrowsePanel: creating entity")
     browsePanelEntity?.destroy()
 
-    // XZ position uses anchor (always to the left of the screen direction).
-    // Y uses seated eye height (~1.1m) plus riser elevation, not live head pose
-    // (which may not reflect setViewOrigin changes immediately).
-    val seatedEyeHeight = 1.1f
-    val leftDir = Vector3(-anchorForward.z, 0f, anchorForward.x).normalize()
-    val position = anchorPosition + anchorForward * 0.6f + leftDir * 0.4f
-    position.y = seatedEyeHeight + currentRiserHeightM - 0.2f
-
-    // Face toward anchor position (not current gaze) with tablet tilt
-    val dx = position.x - anchorPosition.x
-    val dz = position.z - anchorPosition.z
-    val yawDeg = Math.toDegrees(Math.atan2(dx.toDouble(), dz.toDouble())).toFloat()
-    val panelRotation = Quaternion(15f, yawDeg, 0f)
-
+    val pose = ViewerLayout.browsePanelPose(a, theaterState.value.riserHeightM)
     browsePanelEntity =
         Entity.createPanelEntity(
             R.id.browse_panel,
-            Transform(Pose(position, panelRotation)),
+            Transform(pose),
         )
   }
 
@@ -270,8 +229,11 @@ class JellyQuestActivity : AppSystemActivity() {
   }
 
   private fun spawnEnvironment() {
+    val a = anchor ?: return
     skyboxEntity?.destroy()
     floorEntity?.destroy()
+
+    val envPos = TheaterLayout.environmentPosition(a)
 
     // Skybox: near-black sphere centered on the user
     skyboxEntity = Entity.create(listOf(
@@ -280,7 +242,7 @@ class JellyQuestActivity : AppSystemActivity() {
           baseColor = Color4(0.05f, 0.05f, 0.07f, 1f)
           unlit = true
         },
-        Transform(Pose(Vector3(anchorPosition.x, 0f, anchorPosition.z))),
+        Transform(Pose(envPos)),
     ))
 
     // Floor: dark charcoal ground plane (30m x 30m, 1cm thick) centered on the user
@@ -291,25 +253,31 @@ class JellyQuestActivity : AppSystemActivity() {
           baseColor = Color4(0.08f, 0.08f, 0.08f, 1f)
           unlit = true
         },
-        Transform(Pose(Vector3(anchorPosition.x, 0f, anchorPosition.z))),
+        Transform(Pose(envPos)),
     ))
   }
 
   private fun applyTheaterPreset(theater: TheaterExperience, seat: SeatPosition) {
-    currentScreen.value = ScreenConfig(
-        label = theater.name,
-        widthM = theater.screenWidthM,
-        heightM = theater.screenHeightM,
-        distanceM = seat.distanceM,
-        screenBottomM = theater.screenBottomM,
+    theaterState.value = TheaterState(
+        screen = ScreenConfig(
+            label = theater.name,
+            widthM = theater.screenWidthM,
+            heightM = theater.screenHeightM,
+            distanceM = seat.distanceM,
+            screenBottomM = theater.screenBottomM,
+        ),
+        riserHeightM = seat.riserHeightM,
     )
-    // Elevate the user's viewpoint to simulate stadium seating risers
-    currentRiserHeightM = seat.riserHeightM
-    scene.setViewOrigin(0.0f, currentRiserHeightM, 0.0f)
-    Log.i(TAG, "Seat riser height: ${currentRiserHeightM}m")
+    scene.setViewOrigin(0.0f, theaterState.value.riserHeightM, 0.0f)
+    Log.i(TAG, "Seat riser height: ${theaterState.value.riserHeightM}m")
     logScreenPosition()
-    respawnPanel()
-    // Reposition browse panel if visible
+    repositionTheater()
+  }
+
+  /** Respawn all positioned entities using current anchor and theater state. */
+  private fun repositionTheater() {
+    spawnEnvironment()
+    respawnScreen()
     if (browsePanelVisible.value) {
       spawnBrowsePanel()
     }
@@ -319,16 +287,15 @@ class JellyQuestActivity : AppSystemActivity() {
     super.onRecenter(isUserInitiated)
     Log.i(TAG, "onRecenter: userInitiated=$isUserInitiated")
     // Preserve current riser height — recenter reorients but keeps seat elevation
-    scene.setViewOrigin(0.0f, currentRiserHeightM, 0.0f)
-    captureAnchor()
-    spawnEnvironment()
-    respawnPanel()
-    if (browsePanelVisible.value) {
-      spawnBrowsePanel()
+    scene.setViewOrigin(0.0f, theaterState.value.riserHeightM, 0.0f)
+    if (!captureAnchor()) {
+      Log.w(TAG, "onRecenter: failed to capture anchor, retaining previous")
     }
+    repositionTheater()
   }
 
   private fun logScreenPosition() {
+    val a = anchor ?: return
     val headPose =
         Query.where { has(AvatarAttachment.id) }
             .eval()
@@ -337,9 +304,9 @@ class JellyQuestActivity : AppSystemActivity() {
             ?.getComponent<Transform>()
             ?.transform
 
-    val screen = currentScreen.value
-    val screenPos = anchorPosition + anchorForward * screen.distanceM
-    screenPos.y = screen.screenCenterY
+    val screen = theaterState.value.screen
+    val screenPose = TheaterLayout.screenPose(a, screen)
+    val screenPos = screenPose.t
 
     val headPos = headPose?.t ?: Vector3(0f, 0f, 0f)
     val relativePos = Vector3(
@@ -361,9 +328,9 @@ class JellyQuestActivity : AppSystemActivity() {
 
   override fun registerPanels(): List<PanelRegistration> {
     return listOf(
-        // Main monitor panel
+        // Main screen panel
         ComposeViewPanelRegistration(
-            R.id.hello_panel,
+            R.id.screen_panel,
             composeViewCreator = { _, ctx ->
               ComposeView(ctx).apply {
                 setContent {
@@ -375,7 +342,7 @@ class JellyQuestActivity : AppSystemActivity() {
               }
             },
             settingsCreator = {
-              val screen = currentScreen.value
+              val screen = theaterState.value.screen
               // Scale density inversely with panel width to keep texture allocation reasonable.
               val baseDpPerMeter = 600f
               val referencePanelWidth = 1.44f // 65" TV as baseline
@@ -406,7 +373,7 @@ class JellyQuestActivity : AppSystemActivity() {
                         browsePanelEntity?.destroy()
                         browsePanelEntity = null
                       },
-                      currentScreen = currentScreen.value,
+                      currentScreen = theaterState.value.screen,
                       onTheaterSelected = { theater, seat ->
                         applyTheaterPreset(theater, seat)
                       },
