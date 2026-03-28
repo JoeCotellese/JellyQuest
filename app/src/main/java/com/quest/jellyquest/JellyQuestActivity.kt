@@ -179,16 +179,13 @@ class JellyQuestActivity : AppSystemActivity() {
   private fun spawnPanel() {
     val a = anchor ?: return
     val screen = theaterState.value.screen
+    val pose = TheaterLayout.screenPose(a, screen)
 
-    // Place the panel along the anchored forward direction at the selected distance
-    val position = a.position + a.forward * screen.distanceM
-    position.y = screen.screenCenterY
-
-    Log.i(TAG, "Spawning panel at pos=$position rot=${a.rotation} dist=${screen.distanceM}m height=${screen.screenCenterY}m")
+    Log.i(TAG, "Spawning panel at pos=${pose.t} rot=${pose.q} dist=${screen.distanceM}m height=${screen.screenCenterY}m")
     panelEntity =
         Entity.createPanelEntity(
             R.id.hello_panel,
-            Transform(Pose(position, a.rotation)),
+            Transform(pose),
         )
   }
 
@@ -235,7 +232,7 @@ class JellyQuestActivity : AppSystemActivity() {
     skyboxEntity?.destroy()
     floorEntity?.destroy()
 
-    val envPos = Vector3(a.position.x, 0f, a.position.z)
+    val envPos = TheaterLayout.environmentPosition(a)
 
     // Skybox: near-black sphere centered on the user
     skyboxEntity = Entity.create(listOf(
@@ -305,8 +302,8 @@ class JellyQuestActivity : AppSystemActivity() {
             ?.transform
 
     val screen = theaterState.value.screen
-    val screenPos = a.position + a.forward * screen.distanceM
-    screenPos.y = screen.screenCenterY
+    val screenPose = TheaterLayout.screenPose(a, screen)
+    val screenPos = screenPose.t
 
     val headPos = headPose?.t ?: Vector3(0f, 0f, 0f)
     val relativePos = Vector3(
