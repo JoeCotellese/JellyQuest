@@ -137,7 +137,7 @@ class JellyQuestActivity : AppSystemActivity() {
         environmentIntensity = 0.1f,
     )
 
-    scene.setViewOrigin(0.0f, 0.0f, 0.0f, 0.0f)
+    scene.setViewOrigin(0.0f, 0.0f, 0.0f)
 
     spawnEnvironment()
 
@@ -241,8 +241,7 @@ class JellyQuestActivity : AppSystemActivity() {
     Log.i(TAG, "spawnBrowsePanel: creating entity")
     browsePanelEntity?.destroy()
 
-    // Position relative to user's current head, not the fixed anchor.
-    // This ensures the panel follows the user as riser height changes.
+    // Get current head height (affected by setViewOrigin riser elevation)
     val headPose =
         Query.where { has(AvatarAttachment.id) }
             .eval()
@@ -250,22 +249,17 @@ class JellyQuestActivity : AppSystemActivity() {
             .firstOrNull()
             ?.getComponent<Transform>()
             ?.transform
+    val headY = headPose?.t?.y ?: 1.1f
 
-    val userPos = headPose?.t ?: anchorPosition
-    val userForward = if (headPose != null) {
-      val fwd = headPose.forward()
-      fwd.y = 0f
-      fwd.normalize()
-    } else anchorForward
+    // XZ position uses anchor (always to the left of the screen direction),
+    // Y uses live head height (follows riser elevation).
+    val leftDir = Vector3(-anchorForward.z, 0f, anchorForward.x).normalize()
+    val position = anchorPosition + anchorForward * 0.6f + leftDir * 0.4f
+    position.y = headY - 0.2f  // Slightly below current eye level
 
-    // Place browse panel within arms reach, offset to the left, below eye level.
-    val leftDir = Vector3(-userForward.z, 0f, userForward.x).normalize()
-    val position = Vector3(userPos.x, 0f, userPos.z) + userForward * 0.6f + leftDir * 0.4f
-    position.y = userPos.y - 0.2f  // Slightly below current eye level
-
-    // Face the panel content toward the user with a tablet tilt
-    val dx = position.x - userPos.x
-    val dz = position.z - userPos.z
+    // Face toward anchor position (not current gaze) with tablet tilt
+    val dx = position.x - anchorPosition.x
+    val dz = position.z - anchorPosition.z
     val yawDeg = Math.toDegrees(Math.atan2(dx.toDouble(), dz.toDouble())).toFloat()
     val panelRotation = Quaternion(15f, yawDeg, 0f)
 
@@ -319,10 +313,8 @@ class JellyQuestActivity : AppSystemActivity() {
     )
     // Elevate the user's viewpoint to simulate stadium seating risers
     currentRiserHeightM = seat.riserHeightM
-    scene.setViewOrigin(0.0f, currentRiserHeightM, 0.0f, 0.0f)
+    scene.setViewOrigin(0.0f, currentRiserHeightM, 0.0f)
     Log.i(TAG, "Seat riser height: ${currentRiserHeightM}m")
-    // Re-capture anchor after view origin change so positions are correct
-    captureAnchor()
     logScreenPosition()
     respawnPanel()
     // Reposition browse panel if visible
@@ -335,7 +327,7 @@ class JellyQuestActivity : AppSystemActivity() {
     super.onRecenter(isUserInitiated)
     Log.i(TAG, "onRecenter: userInitiated=$isUserInitiated")
     // Preserve current riser height — recenter reorients but keeps seat elevation
-    scene.setViewOrigin(0.0f, currentRiserHeightM, 0.0f, 0.0f)
+    scene.setViewOrigin(0.0f, currentRiserHeightM, 0.0f)
     captureAnchor()
     spawnEnvironment()
     respawnPanel()
