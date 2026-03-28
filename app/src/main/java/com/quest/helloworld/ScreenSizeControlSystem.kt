@@ -10,6 +10,8 @@ class ScreenSizeControlSystem(
     private val onSizeChange: (Int) -> Unit,
     private val onDistanceChange: (Int) -> Unit,
     private val onHeightChange: (Int) -> Unit,
+    private val onBrowseToggle: () -> Unit = {},
+    private val onPlayPauseToggle: () -> Unit = {},
 ) : SystemBase() {
 
   override fun execute() {
@@ -47,6 +49,16 @@ class ScreenSizeControlSystem(
       if (controller.getPressed(ButtonBits.ButtonThumbLD)) {
         onHeightChange(-1)
       }
+    }
+
+    // A button → toggle browse panel
+    if (rightController.getPressed(ButtonBits.ButtonA)) {
+      onBrowseToggle()
+    }
+
+    // B button → play/pause
+    if (rightController.getPressed(ButtonBits.ButtonB)) {
+      onPlayPauseToggle()
     }
   }
 }
