@@ -1,15 +1,11 @@
 package com.quest.jellyquest
 
-import android.view.SurfaceHolder
-import android.view.SurfaceView
-import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,14 +13,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.meta.spatial.uiset.theme.SpatialTheme
 import com.quest.jellyquest.streaming.ConnectionState
 import com.quest.jellyquest.streaming.StreamSource
 
 /**
- * Main monitor composable. When a StreamSource is active and connected,
- * renders video via a SurfaceView. Otherwise falls back to HelloPanel.
+ * Overlay panel composable layered on top of the VideoSurfacePanelRegistration screen.
+ * Renders status text (paused, connecting, error) over the video, and falls back to
+ * HelloPanel when disconnected. Transparent when video is actively playing.
  */
 @Composable
 fun MonitorPanel(
@@ -55,62 +51,31 @@ fun MonitorPanel(
                 )
             }
         }
-        ConnectionState.PLAYING,
+        ConnectionState.PLAYING -> {
+            // Transparent — video from the screen panel shows through
+        }
         ConnectionState.PAUSED -> {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-                // SurfaceView for VLC rendering
-                AndroidView(
-                    factory = { ctx ->
-                        SurfaceView(ctx).apply {
-                            layoutParams = ViewGroup.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                            )
-                            holder.addCallback(object : SurfaceHolder.Callback {
-                                override fun surfaceCreated(holder: SurfaceHolder) {
-                                    streamSource.attachSurface(holder.surface)
-                                }
-                                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
-                                override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                    streamSource.detachSurface()
-                                }
-                            })
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
-
-                // Overlay: media info when paused
-                if (state == ConnectionState.PAUSED) {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "Paused",
-                            style = SpatialTheme.typography.headline1Strong,
-                            color = Color.White,
-                        )
-                    }
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Semi-transparent overlay so paused video is still visible beneath
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Paused",
+                        style = SpatialTheme.typography.headline1Strong,
+                        color = Color.White,
+                    )
                 }
 
-                // Media title overlay at bottom (only when paused)
-                if (state == ConnectionState.PAUSED) {
-                    info?.let { mediaInfo ->
-                        Text(
-                            text = "${mediaInfo.title} (${mediaInfo.width}x${mediaInfo.height})",
-                            style = SpatialTheme.typography.body2,
-                            color = Color.White.copy(alpha = 0.6f),
-                            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
-                        )
-                    }
-                }
-            }
-
-            // Cleanup when composable leaves composition
-            DisposableEffect(streamSource) {
-                onDispose {
-                    streamSource.detachSurface()
+                // Media title and resolution at bottom
+                info?.let { mediaInfo ->
+                    Text(
+                        text = "${mediaInfo.title} (${mediaInfo.width}x${mediaInfo.height})",
+                        style = SpatialTheme.typography.body2,
+                        color = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                    )
                 }
             }
         }
