@@ -200,23 +200,11 @@ class JellyQuestActivity : AppSystemActivity() {
     Log.i(TAG, "spawnBrowsePanel: creating entity")
     browsePanelEntity?.destroy()
 
-    // XZ position uses anchor (always to the left of the screen direction).
-    // Y uses seated eye height (~1.1m) plus riser elevation, not live head pose
-    // (which may not reflect setViewOrigin changes immediately).
-    val seatedEyeHeight = 1.1f
-    val position = a.position + a.forward * 0.6f + a.left * 0.4f
-    position.y = seatedEyeHeight + theaterState.value.riserHeightM - 0.2f
-
-    // Face toward anchor position (not current gaze) with tablet tilt
-    val dx = position.x - a.position.x
-    val dz = position.z - a.position.z
-    val yawDeg = Math.toDegrees(Math.atan2(dx.toDouble(), dz.toDouble())).toFloat()
-    val panelRotation = Quaternion(15f, yawDeg, 0f)
-
+    val pose = ViewerLayout.browsePanelPose(a, theaterState.value.riserHeightM)
     browsePanelEntity =
         Entity.createPanelEntity(
             R.id.browse_panel,
-            Transform(Pose(position, panelRotation)),
+            Transform(pose),
         )
   }
 
