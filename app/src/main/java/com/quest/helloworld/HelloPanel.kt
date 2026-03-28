@@ -25,11 +25,9 @@ import com.meta.spatial.uiset.theme.SpatialTheme
 fun HelloPanel(
     sizeIndex: State<Int>,
     distanceIndex: State<Int>,
-    heightIndex: State<Int>,
 ) {
   val size = SCREEN_SIZES[sizeIndex.value]
   val distance = DISTANCES[distanceIndex.value]
-  val height = HEIGHTS[heightIndex.value]
 
   SpatialTheme(colorScheme = getPanelTheme()) {
     Column(
@@ -58,29 +56,13 @@ fun HelloPanel(
                   color = SpatialTheme.colorScheme.secondaryAlphaBackground
               ),
       )
-      Spacer(modifier = Modifier.size(4.dp))
-      Text(
-          text = "${height.label} — ${height.heightM}m high",
-          textAlign = TextAlign.Center,
-          style =
-              SpatialTheme.typography.body1.copy(
-                  color = SpatialTheme.colorScheme.secondaryAlphaBackground
-              ),
-      )
       Spacer(modifier = Modifier.size(32.dp))
       Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
       ) {
         Text(
-            text = "L: \u25B2 Height \u25BC",
-            style =
-                SpatialTheme.typography.body2.copy(
-                    color = SpatialTheme.colorScheme.secondaryAlphaBackground
-                ),
-        )
-        Text(
-            text = "R: \u25C0 Size \u25B6  \u25B2 Dist \u25BC",
+            text = "X: Theater  A: Browse  B: Play/Pause",
             style =
                 SpatialTheme.typography.body2.copy(
                     color = SpatialTheme.colorScheme.secondaryAlphaBackground

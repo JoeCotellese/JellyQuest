@@ -31,10 +31,9 @@ fun MonitorPanel(
     streamSource: StreamSource?,
     sizeIndex: State<Int>,
     distanceIndex: State<Int>,
-    heightIndex: State<Int>,
 ) {
     if (streamSource == null) {
-        HelloPanel(sizeIndex = sizeIndex, distanceIndex = distanceIndex, heightIndex = heightIndex)
+        HelloPanel(sizeIndex = sizeIndex, distanceIndex = distanceIndex)
         return
     }
 
@@ -43,7 +42,7 @@ fun MonitorPanel(
 
     when (state) {
         ConnectionState.DISCONNECTED -> {
-            HelloPanel(sizeIndex = sizeIndex, distanceIndex = distanceIndex, heightIndex = heightIndex)
+            HelloPanel(sizeIndex = sizeIndex, distanceIndex = distanceIndex)
         }
         ConnectionState.CONNECTING -> {
             Box(
