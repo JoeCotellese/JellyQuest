@@ -77,11 +77,13 @@ class HelloWorldActivity : AppSystemActivity() {
 
   val currentSizeIndex = mutableIntStateOf(7)      // Large Theater
   val currentDistanceIndex = mutableIntStateOf(4)  // Mid Theater
-  val currentHeightIndex = mutableIntStateOf(2)    // Eye Level
+  var currentScreenHeightM = THEATER_SCREEN_HEIGHT  // Screen center height (meters)
 
   private var panelEntity: Entity? = null
   private var browsePanelEntity: Entity? = null
+  private var theaterPickerEntity: Entity? = null
   val browsePanelVisible = mutableStateOf(false)
+  val theaterPickerVisible = mutableStateOf(false)
 
   // Jellyfin + ExoPlayer
   lateinit var exoPlayerSource: ExoPlayerSource
@@ -148,38 +150,11 @@ class HelloWorldActivity : AppSystemActivity() {
 
     systemManager.registerSystem(
         ScreenSizeControlSystem(
-            onSizeChange = { delta ->
-              val newIndex = (currentSizeIndex.intValue + delta).coerceIn(0, SCREEN_SIZES.size - 1)
-              if (newIndex != currentSizeIndex.intValue) {
-                currentSizeIndex.intValue = newIndex
-                // Enforce minimum viewing distance for this screen size
-                val minDist = SCREEN_SIZES[newIndex].minDistanceIndex
-                if (currentDistanceIndex.intValue < minDist) {
-                  currentDistanceIndex.intValue = minDist
-                }
-                respawnPanel()
-              }
-            },
-            onDistanceChange = { delta ->
-              val minDist = SCREEN_SIZES[currentSizeIndex.intValue].minDistanceIndex
-              val newIndex =
-                  (currentDistanceIndex.intValue + delta).coerceIn(minDist, DISTANCES.size - 1)
-              if (newIndex != currentDistanceIndex.intValue) {
-                currentDistanceIndex.intValue = newIndex
-                respawnPanel()
-              }
-            },
-            onHeightChange = { delta ->
-              val newIndex =
-                  (currentHeightIndex.intValue + delta).coerceIn(0, HEIGHTS.size - 1)
-              if (newIndex != currentHeightIndex.intValue) {
-                currentHeightIndex.intValue = newIndex
-                respawnPanel()
-              }
-            },
             onBrowseToggle = {
               browsePanelVisible.value = !browsePanelVisible.value
               if (browsePanelVisible.value) {
+                // Close theater picker if open (mutual exclusion)
+                dismissTheaterPicker()
                 spawnBrowsePanel()
               } else {
                 browsePanelEntity?.destroy()
@@ -188,6 +163,16 @@ class HelloWorldActivity : AppSystemActivity() {
             },
             onPlayPauseToggle = {
               exoPlayerSource.togglePlayPause()
+            },
+            onTheaterToggle = {
+              theaterPickerVisible.value = !theaterPickerVisible.value
+              if (theaterPickerVisible.value) {
+                // Close browse panel if open (mutual exclusion)
+                dismissBrowsePanel()
+                spawnTheaterPicker()
+              } else {
+                dismissTheaterPicker()
+              }
             },
         )
     )
@@ -224,13 +209,12 @@ class HelloWorldActivity : AppSystemActivity() {
 
   private fun spawnPanel() {
     val distance = DISTANCES[currentDistanceIndex.intValue]
-    val height = HEIGHTS[currentHeightIndex.intValue]
 
     // Place the panel along the anchored forward direction at the selected distance
     val position = anchorPosition + anchorForward * distance.distanceM
-    position.y = height.heightM
+    position.y = currentScreenHeightM
 
-    Log.i(TAG, "Spawning panel at pos=$position rot=$anchorRotation dist=${distance.label} height=${height.label}")
+    Log.i(TAG, "Spawning panel at pos=$position rot=$anchorRotation dist=${distance.label} height=${currentScreenHeightM}m")
     panelEntity =
         Entity.createPanelEntity(
             R.id.hello_panel,
@@ -246,19 +230,90 @@ class HelloWorldActivity : AppSystemActivity() {
 
   private fun spawnBrowsePanel() {
     browsePanelEntity?.destroy()
-    val distance = DISTANCES[currentDistanceIndex.intValue]
-    val height = HEIGHTS[currentHeightIndex.intValue]
 
-    // Place browse panel to the right of the main panel
-    val rightDir = Vector3(-anchorForward.z, 0f, anchorForward.x).normalize()
-    val position = anchorPosition + anchorForward * (distance.distanceM * 0.7f) + rightDir * 1.2f
-    position.y = height.heightM
+    // Place browse panel within arms reach, to the left of the user
+    val leftDir = Vector3(-anchorForward.z, 0f, anchorForward.x).normalize()
+    val position = anchorPosition + anchorForward * 0.7f + leftDir * 0.6f
+    position.y = 1.0f  // Seated eye level
 
     browsePanelEntity =
         Entity.createPanelEntity(
             R.id.browse_panel,
             Transform(Pose(position, anchorRotation)),
         )
+  }
+
+  private fun dismissBrowsePanel() {
+    if (browsePanelVisible.value) {
+      browsePanelVisible.value = false
+      browsePanelEntity?.destroy()
+      browsePanelEntity = null
+    }
+  }
+
+  private fun spawnTheaterPicker() {
+    theaterPickerEntity?.destroy()
+
+    // Place theater picker to the right of the user, within arms reach
+    val rightDir = Vector3(anchorForward.z, 0f, -anchorForward.x).normalize()
+    val position = anchorPosition + anchorForward * 0.7f + rightDir * 0.6f
+    position.y = 1.0f  // Seated eye level, slightly below
+
+    Log.i(TAG, "Spawning theater picker at pos=$position")
+    theaterPickerEntity =
+        Entity.createPanelEntity(
+            R.id.theater_picker_panel,
+            Transform(Pose(position, anchorRotation)),
+        )
+  }
+
+  private fun dismissTheaterPicker() {
+    if (theaterPickerVisible.value) {
+      theaterPickerVisible.value = false
+      theaterPickerEntity?.destroy()
+      theaterPickerEntity = null
+    }
+  }
+
+  private fun applyTheaterPreset(sizeIndex: Int, distanceIndex: Int, screenHeightM: Float) {
+    currentSizeIndex.intValue = sizeIndex
+    currentDistanceIndex.intValue = distanceIndex
+    currentScreenHeightM = screenHeightM
+    logScreenPosition()
+    respawnPanel()
+  }
+
+  private fun logScreenPosition() {
+    val headPose =
+        Query.where { has(AvatarAttachment.id) }
+            .eval()
+            .filter { it.isLocal() && it.getComponent<AvatarAttachment>().type == "head" }
+            .firstOrNull()
+            ?.getComponent<Transform>()
+            ?.transform
+
+    val size = SCREEN_SIZES[currentSizeIndex.intValue]
+    val distance = DISTANCES[currentDistanceIndex.intValue]
+
+    val screenPos = anchorPosition + anchorForward * distance.distanceM
+    screenPos.y = currentScreenHeightM
+
+    val headPos = headPose?.t ?: Vector3(0f, 0f, 0f)
+    val relativePos = Vector3(
+        screenPos.x - headPos.x,
+        screenPos.y - headPos.y,
+        screenPos.z - headPos.z,
+    )
+    val distToScreen = Math.sqrt(
+        (relativePos.x * relativePos.x + relativePos.y * relativePos.y + relativePos.z * relativePos.z).toDouble()
+    ).toFloat()
+
+    Log.i(TAG, "Screen position: ${size.label} at ${distance.label}")
+    Log.i(TAG, "  Screen world pos: $screenPos")
+    Log.i(TAG, "  Head world pos: $headPos")
+    Log.i(TAG, "  Relative to head: $relativePos")
+    Log.i(TAG, "  Distance from head: ${String.format("%.2f", distToScreen)}m")
+    Log.i(TAG, "  Screen size: ${size.widthM}m x ${size.heightM}m, Screen center: ${currentScreenHeightM}m")
   }
 
   override fun registerPanels(): List<PanelRegistration> {
@@ -273,7 +328,6 @@ class HelloWorldActivity : AppSystemActivity() {
                       streamSource = exoPlayerSource,
                       sizeIndex = currentSizeIndex,
                       distanceIndex = currentDistanceIndex,
-                      heightIndex = currentHeightIndex,
                   )
                 }
               }
@@ -315,6 +369,33 @@ class HelloWorldActivity : AppSystemActivity() {
             settingsCreator = {
               UIPanelSettings(
                   shape = QuadShapeOptions(width = 0.8f, height = 1.0f),
+                  style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
+                  display = DpPerMeterDisplayOptions(),
+              )
+            },
+        ),
+        // Theater experience picker (shown/hidden via X button)
+        ComposeViewPanelRegistration(
+            R.id.theater_picker_panel,
+            composeViewCreator = { _, ctx ->
+              ComposeView(ctx).apply {
+                setContent {
+                  TheaterPickerPanel(
+                      currentSizeIndex = currentSizeIndex.intValue,
+                      currentDistanceIndex = currentDistanceIndex.intValue,
+                      onTheaterSelected = { sizeIdx, distIdx, screenHeightM ->
+                        applyTheaterPreset(sizeIdx, distIdx, screenHeightM)
+                      },
+                      onDismiss = {
+                        dismissTheaterPicker()
+                      },
+                  )
+                }
+              }
+            },
+            settingsCreator = {
+              UIPanelSettings(
+                  shape = QuadShapeOptions(width = 0.6f, height = 0.8f),
                   style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
                   display = DpPerMeterDisplayOptions(),
               )

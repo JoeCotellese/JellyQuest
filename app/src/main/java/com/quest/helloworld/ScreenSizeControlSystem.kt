@@ -7,11 +7,9 @@ import com.meta.spatial.toolkit.AvatarBody
 import com.meta.spatial.toolkit.Controller
 
 class ScreenSizeControlSystem(
-    private val onSizeChange: (Int) -> Unit,
-    private val onDistanceChange: (Int) -> Unit,
-    private val onHeightChange: (Int) -> Unit,
     private val onBrowseToggle: () -> Unit = {},
     private val onPlayPauseToggle: () -> Unit = {},
+    private val onTheaterToggle: () -> Unit = {},
 ) : SystemBase() {
 
   override fun execute() {
@@ -25,32 +23,6 @@ class ScreenSizeControlSystem(
     val rightController = avatarBody.rightHand.tryGetComponent<Controller>() ?: return
     val leftController = avatarBody.leftHand.tryGetComponent<Controller>()
 
-    // Right thumbstick left/right → cycle screen size
-    if (rightController.getPressed(ButtonBits.ButtonThumbRL)) {
-      onSizeChange(-1)
-    }
-    if (rightController.getPressed(ButtonBits.ButtonThumbRR)) {
-      onSizeChange(1)
-    }
-
-    // Right thumbstick up/down → cycle distance
-    if (rightController.getPressed(ButtonBits.ButtonThumbRU)) {
-      onDistanceChange(1)
-    }
-    if (rightController.getPressed(ButtonBits.ButtonThumbRD)) {
-      onDistanceChange(-1)
-    }
-
-    // Left thumbstick up/down → adjust height
-    leftController?.let { controller ->
-      if (controller.getPressed(ButtonBits.ButtonThumbLU)) {
-        onHeightChange(1)
-      }
-      if (controller.getPressed(ButtonBits.ButtonThumbLD)) {
-        onHeightChange(-1)
-      }
-    }
-
     // A button → toggle browse panel
     if (rightController.getPressed(ButtonBits.ButtonA)) {
       onBrowseToggle()
@@ -59,6 +31,13 @@ class ScreenSizeControlSystem(
     // B button → play/pause
     if (rightController.getPressed(ButtonBits.ButtonB)) {
       onPlayPauseToggle()
+    }
+
+    // X button (left controller) → toggle theater picker
+    leftController?.let { controller ->
+      if (controller.getPressed(ButtonBits.ButtonX)) {
+        onTheaterToggle()
+      }
     }
   }
 }
