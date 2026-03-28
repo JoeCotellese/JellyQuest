@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-  namespace = "com.quest.helloworld"
+  namespace = "com.quest.jellyquest"
   compileSdk = 34
 
   defaultConfig {
-    applicationId = "com.quest.helloworld"
+    applicationId = "com.quest.jellyquest"
     minSdk = 34
     // HorizonOS is Android 14 (API level 34)
     //noinspection OldTargetApi,ExpiredTargetSdkVersion

@@ -1,4 +1,4 @@
-package com.quest.helloworld
+package com.quest.jellyquest
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,9 +32,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.meta.spatial.uiset.theme.LocalColorScheme
 import com.meta.spatial.uiset.theme.SpatialTheme
-import com.quest.helloworld.streaming.AuthState
-import com.quest.helloworld.streaming.JellyfinClient
-import com.quest.helloworld.streaming.JellyfinItem
+import com.quest.jellyquest.streaming.AuthState
+import com.quest.jellyquest.streaming.JellyfinClient
+import com.quest.jellyquest.streaming.JellyfinItem
 import kotlinx.coroutines.launch
 import java.util.UUID
 

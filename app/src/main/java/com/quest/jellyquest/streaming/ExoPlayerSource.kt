@@ -1,6 +1,6 @@
 @file:OptIn(UnstableApi::class)
 
-package com.quest.helloworld.streaming
+package com.quest.jellyquest.streaming
 
 import android.content.Context
 import android.util.Log

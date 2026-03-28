@@ -1,4 +1,4 @@
-package com.quest.helloworld
+package com.quest.jellyquest
 
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -19,8 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.meta.spatial.uiset.theme.SpatialTheme
-import com.quest.helloworld.streaming.ConnectionState
-import com.quest.helloworld.streaming.StreamSource
+import com.quest.jellyquest.streaming.ConnectionState
+import com.quest.jellyquest.streaming.StreamSource
 
 /**
  * Main monitor composable. When a StreamSource is active and connected,
@@ -95,14 +95,16 @@ fun MonitorPanel(
                     }
                 }
 
-                // Media title overlay at bottom
-                info?.let { mediaInfo ->
-                    Text(
-                        text = "${mediaInfo.title} (${mediaInfo.width}x${mediaInfo.height})",
-                        style = SpatialTheme.typography.body2,
-                        color = Color.White.copy(alpha = 0.6f),
-                        modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
-                    )
+                // Media title overlay at bottom (only when paused)
+                if (state == ConnectionState.PAUSED) {
+                    info?.let { mediaInfo ->
+                        Text(
+                            text = "${mediaInfo.title} (${mediaInfo.width}x${mediaInfo.height})",
+                            style = SpatialTheme.typography.body2,
+                            color = Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                        )
+                    }
                 }
             }
 

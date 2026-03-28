@@ -1,4 +1,4 @@
-package com.quest.helloworld
+package com.quest.jellyquest
 
 import android.util.Log
 import com.meta.spatial.core.Query

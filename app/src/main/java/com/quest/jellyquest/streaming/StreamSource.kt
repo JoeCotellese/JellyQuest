@@ -1,4 +1,4 @@
-package com.quest.helloworld.streaming
+package com.quest.jellyquest.streaming
 
 import android.view.Surface
 import kotlinx.coroutines.flow.StateFlow

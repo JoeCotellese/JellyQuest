@@ -67,7 +67,7 @@
       android:required="true"
     />
     <activity
-      android:name="com.quest.helloworld.HelloWorldActivity"
+      android:name="com.quest.jellyquest.JellyQuestActivity"
       android:launchMode="singleTask"
       android:excludeFromRecents="false"
       android:configChanges="screenSize|screenLayout|orientation|keyboardHidden|keyboard|navigation|uiMode"
