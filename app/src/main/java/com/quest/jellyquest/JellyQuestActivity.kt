@@ -241,21 +241,13 @@ class JellyQuestActivity : AppSystemActivity() {
     Log.i(TAG, "spawnBrowsePanel: creating entity")
     browsePanelEntity?.destroy()
 
-    // Get current head height (affected by setViewOrigin riser elevation)
-    val headPose =
-        Query.where { has(AvatarAttachment.id) }
-            .eval()
-            .filter { it.isLocal() && it.getComponent<AvatarAttachment>().type == "head" }
-            .firstOrNull()
-            ?.getComponent<Transform>()
-            ?.transform
-    val headY = headPose?.t?.y ?: 1.1f
-
-    // XZ position uses anchor (always to the left of the screen direction),
-    // Y uses live head height (follows riser elevation).
+    // XZ position uses anchor (always to the left of the screen direction).
+    // Y uses seated eye height (~1.1m) plus riser elevation, not live head pose
+    // (which may not reflect setViewOrigin changes immediately).
+    val seatedEyeHeight = 1.1f
     val leftDir = Vector3(-anchorForward.z, 0f, anchorForward.x).normalize()
     val position = anchorPosition + anchorForward * 0.6f + leftDir * 0.4f
-    position.y = headY - 0.2f  // Slightly below current eye level
+    position.y = seatedEyeHeight + currentRiserHeightM - 0.2f
 
     // Face toward anchor position (not current gaze) with tablet tilt
     val dx = position.x - anchorPosition.x
