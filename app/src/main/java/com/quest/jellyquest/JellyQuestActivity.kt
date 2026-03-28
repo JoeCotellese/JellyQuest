@@ -44,6 +44,20 @@ import com.quest.jellyquest.streaming.ExoPlayerSource
 import com.quest.jellyquest.streaming.JellyfinClient
 import kotlinx.coroutines.launch
 
+/**
+ * Orchestrator for the VR theater experience. Owns entity lifecycle, event wiring,
+ * and SDK panel registration. Delegates ALL positioning math to layout classes:
+ *
+ *  - [TheaterLayout] — world-anchored objects (screen, environment). Placed once
+ *    in world space, fixed unless the anchor resets on recenter.
+ *  - [ViewerLayout] — viewer-relative objects (browse panel). Positioned relative
+ *    to the user's seated location, follows seat elevation changes.
+ *
+ * [Anchor] captures the user's position and facing direction at startup/recenter.
+ * [TheaterState] is the single source of truth for screen config + riser height.
+ *
+ * See issues/002-theater-positioning-architecture.md for the full design rationale.
+ */
 class JellyQuestActivity : AppSystemActivity() {
 
   companion object {
