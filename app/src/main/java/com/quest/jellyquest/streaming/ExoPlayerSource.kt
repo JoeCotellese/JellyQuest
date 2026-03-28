@@ -88,12 +88,22 @@ class ExoPlayerSource(context: Context) : StreamSource {
     }
 
     override fun connect(uri: String) {
+        connect(uri, startPositionMs = 0, startPaused = false)
+    }
+
+    /** Connect with optional resume position. If startPaused, prepares but does not auto-play. */
+    fun connect(uri: String, startPositionMs: Long, startPaused: Boolean) {
         disconnect()
-        Log.i(TAG, "ExoPlayer connecting to: $uri")
+        Log.i(TAG, "ExoPlayer connecting to: $uri (startAt=${startPositionMs}ms, paused=$startPaused)")
         _connectionState.value = ConnectionState.CONNECTING
         player.setMediaItem(MediaItem.fromUri(uri))
+        if (startPositionMs > 0) {
+            player.seekTo(startPositionMs)
+        }
         player.prepare()
-        player.play()
+        if (!startPaused) {
+            player.play()
+        }
     }
 
     override fun disconnect() {

@@ -39,6 +39,9 @@ android {
     buildConfig = true
   }
   composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
+  testOptions {
+    unitTests.isReturnDefaultValues = true
+  }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
@@ -49,6 +52,9 @@ android {
 dependencies {
   implementation(libs.androidx.core.ktx)
   testImplementation(libs.junit)
+  testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.mockk)
+  testImplementation(libs.json)
   androidTestImplementation(libs.androidx.junit)
   androidTestImplementation(libs.androidx.espresso.core)
 
@@ -71,6 +77,7 @@ dependencies {
 
   // Jellyfin SDK
   implementation(libs.jellyfin.core)
+  implementation(libs.slf4j.android)
 
   // ExoPlayer (Media3)
   implementation(libs.media3.exoplayer)

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,6 +39,7 @@ import com.meta.spatial.uiset.theme.SpatialTheme
 import com.quest.jellyquest.streaming.AuthState
 import com.quest.jellyquest.streaming.JellyfinClient
 import com.quest.jellyquest.streaming.JellyfinItem
+import com.quest.jellyquest.streaming.PlaybackReporter
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -50,7 +52,7 @@ enum class BrowseTab { BROWSE, THEATER }
 @Composable
 fun BrowsePanel(
     jellyfinClient: JellyfinClient,
-    onMediaSelected: (UUID) -> Unit,
+    onMediaSelected: (JellyfinItem) -> Unit,
     currentScreen: ScreenConfig,
     onTheaterSelected: (theater: TheaterExperience, seat: SeatPosition) -> Unit,
 ) {
@@ -244,7 +246,7 @@ private fun QuickConnectWaiting(jellyfinClient: JellyfinClient) {
 @Composable
 private fun LibraryBrowser(
     jellyfinClient: JellyfinClient,
-    onMediaSelected: (UUID) -> Unit,
+    onMediaSelected: (JellyfinItem) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var currentItems by remember { mutableStateOf<List<JellyfinItem>?>(null) }
@@ -338,8 +340,7 @@ private fun LibraryBrowser(
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(items) { item ->
                     BrowseListItem(
-                        title = item.name,
-                        isFolder = item.isFolder,
+                        item = item,
                         onClick = {
                             if (item.isFolder) {
                                 val cachedChildren = jellyfinClient.cachedItems.value[item.id]
@@ -356,7 +357,7 @@ private fun LibraryBrowser(
                                     }
                                 }
                             } else {
-                                onMediaSelected(item.id)
+                                onMediaSelected(item)
                             }
                         },
                     )
@@ -368,31 +369,76 @@ private fun LibraryBrowser(
 
 @Composable
 private fun BrowseListItem(
-    title: String,
-    isFolder: Boolean,
+    item: JellyfinItem,
     onClick: () -> Unit,
 ) {
-    Row(
+    val hasProgress = !item.isFolder && item.runTimeTicks > 0 && item.playbackPositionTicks > 0
+    val fullyWatched = hasProgress && PlaybackReporter.isFullyWatched(
+        item.playbackPositionTicks, item.runTimeTicks,
+    )
+    val progressPercent = if (hasProgress) {
+        PlaybackReporter.computeProgressPercent(item.playbackPositionTicks, item.runTimeTicks)
+    } else 0
+    val remainingMin = if (hasProgress && !fullyWatched) {
+        PlaybackReporter.computeRemainingMinutes(item.playbackPositionTicks, item.runTimeTicks)
+    } else 0
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clickable(onClick = onClick),
     ) {
-        Text(
-            text = if (isFolder) "[+]" else "   ",
-            style = SpatialTheme.typography.body1.copy(
-                color = if (isFolder) DraculaYellow else DraculaGreen,
-            ),
-        )
-        Spacer(modifier = Modifier.size(12.dp))
-        Text(
-            text = title,
-            style = SpatialTheme.typography.body1.copy(
-                color = SpatialTheme.colorScheme.primaryAlphaBackground,
-            ),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (item.isFolder) "[+]" else "   ",
+                style = SpatialTheme.typography.body1.copy(
+                    color = if (item.isFolder) DraculaYellow else DraculaGreen,
+                ),
+            )
+            Spacer(modifier = Modifier.size(12.dp))
+            Text(
+                text = item.name,
+                style = SpatialTheme.typography.body1.copy(
+                    color = SpatialTheme.colorScheme.primaryAlphaBackground,
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (fullyWatched) {
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = "Watched",
+                    style = SpatialTheme.typography.body2.copy(color = DraculaGreen),
+                )
+            } else if (hasProgress && remainingMin > 0) {
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = "${remainingMin} min left",
+                    style = SpatialTheme.typography.body2.copy(color = DraculaOrange),
+                )
+            }
+        }
+        if (hasProgress && !fullyWatched && progressPercent > 0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .background(DraculaCurrentLine)
+                    .height(2.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progressPercent / 100f)
+                        .background(DraculaPurple)
+                        .height(2.dp),
+                )
+            }
+        }
     }
 }
