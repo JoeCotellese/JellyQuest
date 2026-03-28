@@ -91,6 +91,11 @@ class JellyQuestActivity : AppSystemActivity() {
   lateinit var jellyfinClient: JellyfinClient
   private lateinit var playbackReporter: PlaybackReporter
 
+  // Current video dimensions for aspect-ratio fitting. Updated when ExoPlayer
+  // reports a new video size; triggers screen respawn so the panel reshapes.
+  private var videoWidth: Int = 0
+  private var videoHeight: Int = 0
+
   // Anchor: immutable snapshot of the user's position and facing direction.
   // Captured at startup and on recenter. All placement is relative to this point.
   private var anchor: Anchor? = null
@@ -120,6 +125,20 @@ class JellyQuestActivity : AppSystemActivity() {
         scope = activityScope,
     )
     Log.i(TAG, "ExoPlayer, Jellyfin client, and playback reporter initialized")
+
+    // Reshape screen panel when video dimensions change (aspect-ratio masking)
+    activityScope.launch {
+      exoPlayerSource.mediaInfo.collect { info ->
+        val w = info?.width ?: 0
+        val h = info?.height ?: 0
+        if (w > 0 && h > 0 && (w != videoWidth || h != videoHeight)) {
+          videoWidth = w
+          videoHeight = h
+          Log.i(TAG, "Video size changed to ${w}x${h}, reshaping screen panel")
+          respawnScreen()
+        }
+      }
+    }
 
     // Pre-fetch library content if already authenticated from saved credentials
     if (jellyfinClient.authState.value == AuthState.AUTHENTICATED) {
@@ -378,9 +397,12 @@ class JellyQuestActivity : AppSystemActivity() {
             },
             settingsCreator = {
               val screen = theaterState.value.screen
+              val (fitW, fitH) = fitVideoToScreen(screen.widthM, screen.heightM, videoWidth, videoHeight)
+              val pixW = if (videoWidth > 0) videoWidth else 1920
+              val pixH = if (videoHeight > 0) videoHeight else 1080
               MediaPanelSettings(
-                  shape = QuadShapeOptions(width = screen.widthM, height = screen.heightM),
-                  display = PixelDisplayOptions(width = 1920, height = 1080),
+                  shape = QuadShapeOptions(width = fitW, height = fitH),
+                  display = PixelDisplayOptions(width = pixW, height = pixH),
                   rendering = MediaPanelRenderOptions(isDRM = false, zIndex = 0),
                   style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
               )
@@ -401,11 +423,12 @@ class JellyQuestActivity : AppSystemActivity() {
             },
             settingsCreator = {
               val screen = theaterState.value.screen
+              val (fitW, fitH) = fitVideoToScreen(screen.widthM, screen.heightM, videoWidth, videoHeight)
               val baseDpPerMeter = 600f
               val referencePanelWidth = 1.44f // 65" TV as baseline
-              val dpPerMeter = (baseDpPerMeter * referencePanelWidth / screen.widthM).coerceIn(40f, baseDpPerMeter)
+              val dpPerMeter = (baseDpPerMeter * referencePanelWidth / fitW).coerceIn(40f, baseDpPerMeter)
               UIPanelSettings(
-                  shape = QuadShapeOptions(width = screen.widthM, height = screen.heightM),
+                  shape = QuadShapeOptions(width = fitW, height = fitH),
                   style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
                   display = DpPerMeterDisplayOptions(dpPerMeter),
                   input = PanelInputOptions(
