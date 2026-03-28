@@ -6,8 +6,8 @@ class AnchorCaptureSystem(private val activity: JellyQuestActivity) : SystemBase
 
   override fun execute() {
     if (activity.captureAnchor()) {
-      // Anchor captured — spawn the panel and remove this system
-      activity.spawnPanelFromSystem()
+      // Anchor captured — spawn the screen and remove this system
+      activity.spawnScreenFromSystem()
       systemManager.unregisterSystem<AnchorCaptureSystem>()
     }
   }

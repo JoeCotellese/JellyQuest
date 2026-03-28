@@ -16,7 +16,6 @@ import com.meta.spatial.core.Color4
 import com.meta.spatial.core.Entity
 import com.meta.spatial.core.Pose
 import com.meta.spatial.core.Query
-import com.meta.spatial.core.Quaternion
 import com.meta.spatial.core.SpatialFeature
 import com.meta.spatial.core.Vector3
 import com.meta.spatial.toolkit.AvatarAttachment
@@ -57,7 +56,7 @@ class JellyQuestActivity : AppSystemActivity() {
   // Derived state for Compose panels that only need screen config
   val currentScreen: State<ScreenConfig> get() = derivedStateOf { theaterState.value.screen }
 
-  private var panelEntity: Entity? = null
+  private var screenEntity: Entity? = null
   private var browsePanelEntity: Entity? = null
   val browsePanelVisible = mutableStateOf(false)
   private var skyboxEntity: Entity? = null
@@ -125,7 +124,7 @@ class JellyQuestActivity : AppSystemActivity() {
       systemManager.registerSystem(AnchorCaptureSystem(this))
     } else {
       spawnEnvironment()
-      spawnPanel()
+      spawnScreen()
       // Auto-open browse panel if library cache is available
       if (jellyfinClient.cachedLibraries.value != null) {
         browsePanelVisible.value = true
@@ -166,9 +165,9 @@ class JellyQuestActivity : AppSystemActivity() {
     return true
   }
 
-  fun spawnPanelFromSystem() {
+  fun spawnScreenFromSystem() {
     spawnEnvironment()
-    spawnPanel()
+    spawnScreen()
     // Auto-open browse panel if library cache is available
     if (jellyfinClient.cachedLibraries.value != null) {
       browsePanelVisible.value = true
@@ -176,23 +175,23 @@ class JellyQuestActivity : AppSystemActivity() {
     }
   }
 
-  private fun spawnPanel() {
+  private fun spawnScreen() {
     val a = anchor ?: return
     val screen = theaterState.value.screen
     val pose = TheaterLayout.screenPose(a, screen)
 
-    Log.i(TAG, "Spawning panel at pos=${pose.t} rot=${pose.q} dist=${screen.distanceM}m height=${screen.screenCenterY}m")
-    panelEntity =
+    Log.i(TAG, "Spawning screen at pos=${pose.t} rot=${pose.q} dist=${screen.distanceM}m height=${screen.screenCenterY}m")
+    screenEntity =
         Entity.createPanelEntity(
-            R.id.hello_panel,
+            R.id.screen_panel,
             Transform(pose),
         )
   }
 
-  private fun respawnPanel() {
-    panelEntity?.destroy()
-    panelEntity = null
-    spawnPanel()
+  private fun respawnScreen() {
+    screenEntity?.destroy()
+    screenEntity = null
+    spawnScreen()
   }
 
   private fun spawnBrowsePanel() {
@@ -259,7 +258,7 @@ class JellyQuestActivity : AppSystemActivity() {
     scene.setViewOrigin(0.0f, theaterState.value.riserHeightM, 0.0f)
     Log.i(TAG, "Seat riser height: ${theaterState.value.riserHeightM}m")
     logScreenPosition()
-    respawnPanel()
+    respawnScreen()
     // Reposition browse panel if visible
     if (browsePanelVisible.value) {
       spawnBrowsePanel()
@@ -273,7 +272,7 @@ class JellyQuestActivity : AppSystemActivity() {
     scene.setViewOrigin(0.0f, theaterState.value.riserHeightM, 0.0f)
     captureAnchor()
     spawnEnvironment()
-    respawnPanel()
+    respawnScreen()
     if (browsePanelVisible.value) {
       spawnBrowsePanel()
     }
@@ -313,9 +312,9 @@ class JellyQuestActivity : AppSystemActivity() {
 
   override fun registerPanels(): List<PanelRegistration> {
     return listOf(
-        // Main monitor panel
+        // Main screen panel
         ComposeViewPanelRegistration(
-            R.id.hello_panel,
+            R.id.screen_panel,
             composeViewCreator = { _, ctx ->
               ComposeView(ctx).apply {
                 setContent {
