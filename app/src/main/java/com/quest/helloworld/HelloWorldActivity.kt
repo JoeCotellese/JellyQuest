@@ -20,8 +20,10 @@ import com.meta.spatial.debugtools.HotReloadFeature
 import com.meta.spatial.ovrmetrics.OVRMetricsDataModel
 import com.meta.spatial.ovrmetrics.OVRMetricsFeature
 import com.meta.spatial.runtime.ReferenceSpace
+import com.meta.spatial.runtime.ButtonBits
 import com.meta.spatial.toolkit.AppSystemActivity
 import com.meta.spatial.toolkit.DpPerMeterDisplayOptions
+import com.meta.spatial.toolkit.PanelInputOptions
 import com.meta.spatial.toolkit.PanelRegistration
 import com.meta.spatial.toolkit.PanelStyleOptions
 import com.meta.spatial.toolkit.QuadShapeOptions
@@ -151,24 +153,23 @@ class HelloWorldActivity : AppSystemActivity() {
     systemManager.registerSystem(
         ScreenSizeControlSystem(
             onBrowseToggle = {
-              browsePanelVisible.value = !browsePanelVisible.value
-              if (browsePanelVisible.value) {
-                // Close theater picker if open (mutual exclusion)
+              Log.i(TAG, "onBrowseToggle: visible=${browsePanelVisible.value}")
+              if (!browsePanelVisible.value) {
                 dismissTheaterPicker()
+                browsePanelVisible.value = true
                 spawnBrowsePanel()
               } else {
-                browsePanelEntity?.destroy()
-                browsePanelEntity = null
+                dismissBrowsePanel()
               }
             },
             onPlayPauseToggle = {
               exoPlayerSource.togglePlayPause()
             },
             onTheaterToggle = {
-              theaterPickerVisible.value = !theaterPickerVisible.value
-              if (theaterPickerVisible.value) {
-                // Close browse panel if open (mutual exclusion)
+              Log.i(TAG, "onTheaterToggle: visible=${theaterPickerVisible.value}")
+              if (!theaterPickerVisible.value) {
                 dismissBrowsePanel()
+                theaterPickerVisible.value = true
                 spawnTheaterPicker()
               } else {
                 dismissTheaterPicker()
@@ -229,6 +230,7 @@ class HelloWorldActivity : AppSystemActivity() {
   }
 
   private fun spawnBrowsePanel() {
+    Log.i(TAG, "spawnBrowsePanel: creating entity")
     browsePanelEntity?.destroy()
 
     // Place browse panel within arms reach, to the left of the user
@@ -244,14 +246,14 @@ class HelloWorldActivity : AppSystemActivity() {
   }
 
   private fun dismissBrowsePanel() {
-    if (browsePanelVisible.value) {
-      browsePanelVisible.value = false
-      browsePanelEntity?.destroy()
-      browsePanelEntity = null
-    }
+    Log.i(TAG, "dismissBrowsePanel: visible=${browsePanelVisible.value}, entity=${browsePanelEntity?.id}")
+    browsePanelVisible.value = false
+    browsePanelEntity?.destroy()
+    browsePanelEntity = null
   }
 
   private fun spawnTheaterPicker() {
+    Log.i(TAG, "spawnTheaterPicker: creating entity")
     theaterPickerEntity?.destroy()
 
     // Place theater picker to the right of the user, within arms reach
@@ -268,11 +270,10 @@ class HelloWorldActivity : AppSystemActivity() {
   }
 
   private fun dismissTheaterPicker() {
-    if (theaterPickerVisible.value) {
-      theaterPickerVisible.value = false
-      theaterPickerEntity?.destroy()
-      theaterPickerEntity = null
-    }
+    Log.i(TAG, "dismissTheaterPicker: visible=${theaterPickerVisible.value}, entity=${theaterPickerEntity?.id}")
+    theaterPickerVisible.value = false
+    theaterPickerEntity?.destroy()
+    theaterPickerEntity = null
   }
 
   private fun applyTheaterPreset(sizeIndex: Int, distanceIndex: Int, screenHeightM: Float) {
@@ -343,6 +344,9 @@ class HelloWorldActivity : AppSystemActivity() {
                   shape = QuadShapeOptions(width = size.widthM, height = size.heightM),
                   style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
                   display = DpPerMeterDisplayOptions(dpPerMeter),
+                  input = PanelInputOptions(
+                      ButtonBits.ButtonTriggerL or ButtonBits.ButtonTriggerR
+                  ),
               )
             },
         ),
@@ -371,6 +375,9 @@ class HelloWorldActivity : AppSystemActivity() {
                   shape = QuadShapeOptions(width = 0.8f, height = 1.0f),
                   style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
                   display = DpPerMeterDisplayOptions(),
+                  input = PanelInputOptions(
+                      ButtonBits.ButtonTriggerL or ButtonBits.ButtonTriggerR
+                  ),
               )
             },
         ),
@@ -387,6 +394,7 @@ class HelloWorldActivity : AppSystemActivity() {
                         applyTheaterPreset(sizeIdx, distIdx, screenHeightM)
                       },
                       onDismiss = {
+                        Log.i(TAG, "TheaterPicker onDismiss callback fired")
                         dismissTheaterPicker()
                       },
                   )
@@ -398,6 +406,9 @@ class HelloWorldActivity : AppSystemActivity() {
                   shape = QuadShapeOptions(width = 0.6f, height = 0.8f),
                   style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
                   display = DpPerMeterDisplayOptions(),
+                  input = PanelInputOptions(
+                      ButtonBits.ButtonTriggerL or ButtonBits.ButtonTriggerR
+                  ),
               )
             },
         ),
