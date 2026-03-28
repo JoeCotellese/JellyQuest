@@ -254,12 +254,16 @@ class JellyQuestActivity : AppSystemActivity() {
         ),
         riserHeightM = seat.riserHeightM,
     )
-    // Elevate the user's viewpoint to simulate stadium seating risers
     scene.setViewOrigin(0.0f, theaterState.value.riserHeightM, 0.0f)
     Log.i(TAG, "Seat riser height: ${theaterState.value.riserHeightM}m")
     logScreenPosition()
+    repositionTheater()
+  }
+
+  /** Respawn all positioned entities using current anchor and theater state. */
+  private fun repositionTheater() {
+    spawnEnvironment()
     respawnScreen()
-    // Reposition browse panel if visible
     if (browsePanelVisible.value) {
       spawnBrowsePanel()
     }
@@ -270,12 +274,10 @@ class JellyQuestActivity : AppSystemActivity() {
     Log.i(TAG, "onRecenter: userInitiated=$isUserInitiated")
     // Preserve current riser height — recenter reorients but keeps seat elevation
     scene.setViewOrigin(0.0f, theaterState.value.riserHeightM, 0.0f)
-    captureAnchor()
-    spawnEnvironment()
-    respawnScreen()
-    if (browsePanelVisible.value) {
-      spawnBrowsePanel()
+    if (!captureAnchor()) {
+      Log.w(TAG, "onRecenter: failed to capture anchor, retaining previous")
     }
+    repositionTheater()
   }
 
   private fun logScreenPosition() {

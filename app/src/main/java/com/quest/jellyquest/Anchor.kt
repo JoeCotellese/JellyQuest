@@ -47,9 +47,9 @@ data class Anchor(
 
             val position = Vector3(headPose.t.x, 0f, headPose.t.z)
             // SDK: +Z is forward. Pose.forward() = headPose.q * Vector3(0,0,1)
-            val forward = headPose.forward()
-            forward.y = 0f
-            val normalizedForward = forward.normalize()
+            // Construct a fresh vector to avoid mutating SDK internals
+            val rawForward = headPose.forward()
+            val normalizedForward = Vector3(rawForward.x, 0f, rawForward.z).normalize()
             val rotation = Quaternion.lookRotationAroundY(normalizedForward)
 
             Log.i(TAG, "Anchor captured: pos=$position fwd=$normalizedForward rot=$rotation headPose=${headPose.t}")

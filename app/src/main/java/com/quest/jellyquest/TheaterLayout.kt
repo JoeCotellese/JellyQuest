@@ -12,8 +12,8 @@ object TheaterLayout {
 
     /** Compute the screen panel's world-space pose from anchor and screen config. */
     fun screenPose(anchor: Anchor, screen: ScreenConfig): Pose {
-        val position = anchor.position + anchor.forward * screen.distanceM
-        position.y = screen.screenCenterY
+        val xz = anchor.position + anchor.forward * screen.distanceM
+        val position = Vector3(xz.x, screen.screenCenterY, xz.z)
         return Pose(position, anchor.rotation)
     }
 

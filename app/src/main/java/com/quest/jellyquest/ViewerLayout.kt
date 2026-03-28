@@ -2,6 +2,7 @@ package com.quest.jellyquest
 
 import com.meta.spatial.core.Pose
 import com.meta.spatial.core.Quaternion
+import com.meta.spatial.core.Vector3
 
 /**
  * Pure positioning logic for viewer-relative objects (control panels).
@@ -26,10 +27,10 @@ object ViewerLayout {
      * at the viewer's current seated eye height (including riser).
      */
     fun browsePanelPose(anchor: Anchor, riserHeightM: Float): Pose {
-        val position = anchor.position +
+        val xz = anchor.position +
             anchor.forward * BROWSE_FORWARD +
             anchor.left * BROWSE_LEFT
-        position.y = SEATED_EYE_HEIGHT + riserHeightM - BROWSE_BELOW_EYE
+        val position = Vector3(xz.x, SEATED_EYE_HEIGHT + riserHeightM - BROWSE_BELOW_EYE, xz.z)
 
         // Face toward anchor position (not current gaze) with tablet tilt
         val dx = position.x - anchor.position.x
