@@ -8,8 +8,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
 import android.util.Log
-import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.net.toUri
@@ -76,11 +74,8 @@ class JellyQuestActivity : AppSystemActivity() {
   private val activityScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
   val theaterState = mutableStateOf(TheaterState())
-  // Derived state for Compose panels that only need screen config
-  val currentScreen: State<ScreenConfig> get() = derivedStateOf { theaterState.value.screen }
 
   private var screenEntity: Entity? = null
-  private var screenOverlayEntity: Entity? = null
   private var browsePanelEntity: Entity? = null
   val browsePanelVisible = mutableStateOf(false)
   private var skyboxEntity: Entity? = null
@@ -252,18 +247,11 @@ class JellyQuestActivity : AppSystemActivity() {
             R.id.screen_panel,
             Transform(pose),
         )
-    screenOverlayEntity =
-        Entity.createPanelEntity(
-            R.id.screen_overlay_panel,
-            Transform(pose),
-        )
   }
 
   private fun respawnScreen() {
     screenEntity?.destroy()
     screenEntity = null
-    screenOverlayEntity?.destroy()
-    screenOverlayEntity = null
     spawnScreen()
   }
 
@@ -405,35 +393,6 @@ class JellyQuestActivity : AppSystemActivity() {
                   display = PixelDisplayOptions(width = pixW, height = pixH),
                   rendering = MediaPanelRenderOptions(isDRM = false, zIndex = 0),
                   style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
-              )
-            },
-        ),
-        // Screen overlay panel — transparent Compose layer for status text (paused, connecting, etc.)
-        ComposeViewPanelRegistration(
-            R.id.screen_overlay_panel,
-            composeViewCreator = { _, ctx ->
-              ComposeView(ctx).apply {
-                setContent {
-                  MonitorPanel(
-                      streamSource = exoPlayerSource,
-                      screenConfig = currentScreen,
-                  )
-                }
-              }
-            },
-            settingsCreator = {
-              val screen = theaterState.value.screen
-              val (fitW, fitH) = fitVideoToScreen(screen.widthM, screen.heightM, videoWidth, videoHeight)
-              val baseDpPerMeter = 600f
-              val referencePanelWidth = 1.44f // 65" TV as baseline
-              val dpPerMeter = (baseDpPerMeter * referencePanelWidth / fitW).coerceIn(40f, baseDpPerMeter)
-              UIPanelSettings(
-                  shape = QuadShapeOptions(width = fitW, height = fitH),
-                  style = PanelStyleOptions(themeResourceId = R.style.PanelAppThemeTransparent),
-                  display = DpPerMeterDisplayOptions(dpPerMeter),
-                  input = PanelInputOptions(
-                      ButtonBits.ButtonTriggerL or ButtonBits.ButtonTriggerR
-                  ),
               )
             },
         ),
