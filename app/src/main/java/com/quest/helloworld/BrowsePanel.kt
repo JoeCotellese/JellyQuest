@@ -209,11 +209,16 @@ private fun LibraryBrowser(
     var breadcrumb by remember { mutableStateOf<List<Pair<String, UUID?>>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
 
-    // Load libraries on first display
+    // Use pre-fetched data if available, otherwise fetch on demand
     LaunchedEffect(Unit) {
-        isLoading = true
-        currentItems = jellyfinClient.getLibraries()
-        isLoading = false
+        val cached = jellyfinClient.cachedLibraries.value
+        if (cached != null) {
+            currentItems = cached
+        } else {
+            isLoading = true
+            currentItems = jellyfinClient.getLibraries()
+            isLoading = false
+        }
     }
 
     // Header
@@ -242,16 +247,28 @@ private fun LibraryBrowser(
             text = "< Back",
             style = SpatialTheme.typography.body1.copy(color = DraculaCyan),
             modifier = Modifier.clickable {
-                isLoading = true
-                scope.launch {
-                    breadcrumb = breadcrumb.dropLast(1)
-                    val parentId = breadcrumb.lastOrNull()?.second
-                    currentItems = if (parentId != null) {
-                        jellyfinClient.getItems(parentId)
-                    } else {
-                        jellyfinClient.getLibraries()
+                val newBreadcrumb = breadcrumb.dropLast(1)
+                val parentId = newBreadcrumb.lastOrNull()?.second
+                // Check cache before fetching
+                val cached = if (parentId != null) {
+                    jellyfinClient.cachedItems.value[parentId]
+                } else {
+                    jellyfinClient.cachedLibraries.value
+                }
+                if (cached != null) {
+                    breadcrumb = newBreadcrumb
+                    currentItems = cached
+                } else {
+                    isLoading = true
+                    scope.launch {
+                        breadcrumb = newBreadcrumb
+                        currentItems = if (parentId != null) {
+                            jellyfinClient.getItems(parentId)
+                        } else {
+                            jellyfinClient.getLibraries()
+                        }
+                        isLoading = false
                     }
-                    isLoading = false
                 }
             },
         )
@@ -283,12 +300,18 @@ private fun LibraryBrowser(
                         isFolder = item.isFolder,
                         onClick = {
                             if (item.isFolder) {
-                                isLoading = true
-                                scope.launch {
-                                    val children = jellyfinClient.getItems(item.id)
-                                    currentItems = children
+                                val cachedChildren = jellyfinClient.cachedItems.value[item.id]
+                                if (cachedChildren != null) {
+                                    currentItems = cachedChildren
                                     breadcrumb = breadcrumb + (item.name to item.id)
-                                    isLoading = false
+                                } else {
+                                    isLoading = true
+                                    scope.launch {
+                                        val children = jellyfinClient.getItems(item.id)
+                                        currentItems = children
+                                        breadcrumb = breadcrumb + (item.name to item.id)
+                                        isLoading = false
+                                    }
                                 }
                             } else {
                                 onMediaSelected(item.id)

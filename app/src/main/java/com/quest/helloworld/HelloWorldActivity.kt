@@ -1,6 +1,8 @@
 package com.quest.helloworld
 
 import android.os.Bundle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import android.util.Log
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,8 +39,10 @@ import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.UIPanelSettings
 import com.meta.spatial.toolkit.createPanelEntity
 import com.meta.spatial.vr.VRFeature
+import com.quest.helloworld.streaming.AuthState
 import com.quest.helloworld.streaming.ExoPlayerSource
 import com.quest.helloworld.streaming.JellyfinClient
+import kotlinx.coroutines.launch
 
 data class ScreenPreset(val label: String, val widthM: Float, val heightM: Float, val minDistanceIndex: Int = 0)
 data class DistancePreset(val label: String, val distanceM: Float)
@@ -83,6 +87,8 @@ class HelloWorldActivity : AppSystemActivity() {
     private const val TAG = "VirtualMonitor"
   }
 
+  private val activityScope = CoroutineScope(Dispatchers.Main)
+
   val currentSizeIndex = mutableIntStateOf(7)      // Large Theater
   val currentDistanceIndex = mutableIntStateOf(4)  // Mid Theater
   // Screen center Y: bottom edge at STAGE_HEIGHT + half the screen's physical height
@@ -126,6 +132,11 @@ class HelloWorldActivity : AppSystemActivity() {
     exoPlayerSource = ExoPlayerSource(this)
     jellyfinClient = JellyfinClient(this)
     Log.i(TAG, "ExoPlayer and Jellyfin client initialized")
+
+    // Pre-fetch library content if already authenticated from saved credentials
+    if (jellyfinClient.authState.value == AuthState.AUTHENTICATED) {
+      activityScope.launch { jellyfinClient.prefetchLibraryContent() }
+    }
   }
 
   override fun onDestroy() {
@@ -157,6 +168,11 @@ class HelloWorldActivity : AppSystemActivity() {
       systemManager.registerSystem(AnchorCaptureSystem(this))
     } else {
       spawnPanel()
+      // Auto-open browse panel if library cache is available
+      if (jellyfinClient.cachedLibraries.value != null) {
+        browsePanelVisible.value = true
+        spawnBrowsePanel()
+      }
     }
 
     systemManager.registerSystem(
@@ -215,6 +231,11 @@ class HelloWorldActivity : AppSystemActivity() {
 
   fun spawnPanelFromSystem() {
     spawnPanel()
+    // Auto-open browse panel if library cache is available
+    if (jellyfinClient.cachedLibraries.value != null) {
+      browsePanelVisible.value = true
+      spawnBrowsePanel()
+    }
   }
 
   private fun spawnPanel() {
