@@ -15,9 +15,6 @@ data class SeatPosition(
     val riserHeightM: Float = 0f,
 )
 
-// Bottom of screen sits at stage height, like a real theater
-const val STAGE_HEIGHT = 1.2f
-
 // Riser heights calculated from 7.1° stadium slope (tan(7.1°) ≈ 0.124m rise per meter).
 // Front row is the baseline (0m rise); other seats rise relative to front row distance.
 val THEATER_EXPERIENCES = listOf(
