@@ -23,11 +23,9 @@ import com.meta.spatial.uiset.theme.SpatialTheme
 
 @Composable
 fun HelloPanel(
-    sizeIndex: State<Int>,
-    distanceIndex: State<Int>,
+    screenConfig: State<ScreenConfig>,
 ) {
-  val size = SCREEN_SIZES[sizeIndex.value]
-  val distance = DISTANCES[distanceIndex.value]
+  val screen = screenConfig.value
 
   SpatialTheme(colorScheme = getPanelTheme()) {
     Column(
@@ -40,7 +38,7 @@ fun HelloPanel(
         verticalArrangement = Arrangement.Center,
     ) {
       Text(
-          text = size.label,
+          text = screen.label,
           textAlign = TextAlign.Center,
           style =
               SpatialTheme.typography.headline1Strong.copy(
@@ -49,7 +47,7 @@ fun HelloPanel(
       )
       Spacer(modifier = Modifier.size(16.dp))
       Text(
-          text = "${distance.label} — ${distance.distanceM}m away",
+          text = "${screen.distanceM}m away",
           textAlign = TextAlign.Center,
           style =
               SpatialTheme.typography.body1.copy(
@@ -62,7 +60,7 @@ fun HelloPanel(
           horizontalArrangement = Arrangement.SpaceBetween,
       ) {
         Text(
-            text = "X: Theater  A: Browse  B: Play/Pause",
+            text = "X: Browse  A: Play/Pause  B: Stop",
             style =
                 SpatialTheme.typography.body2.copy(
                     color = SpatialTheme.colorScheme.secondaryAlphaBackground

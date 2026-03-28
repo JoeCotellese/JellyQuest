@@ -51,9 +51,8 @@ enum class BrowseTab { BROWSE, THEATER }
 fun BrowsePanel(
     jellyfinClient: JellyfinClient,
     onMediaSelected: (UUID) -> Unit,
-    currentSizeIndex: Int,
-    currentDistanceIndex: Int,
-    onTheaterSelected: (sizeIndex: Int, distanceIndex: Int, screenHeightM: Float) -> Unit,
+    currentScreen: ScreenConfig,
+    onTheaterSelected: (theater: TheaterExperience, seat: SeatPosition) -> Unit,
 ) {
     val authState by jellyfinClient.authState.collectAsState()
     val errorMessage by jellyfinClient.errorMessage.collectAsState()
@@ -117,8 +116,7 @@ fun BrowsePanel(
                 }
                 BrowseTab.THEATER -> {
                     TheaterPickerContent(
-                        currentSizeIndex = currentSizeIndex,
-                        currentDistanceIndex = currentDistanceIndex,
+                        currentScreen = currentScreen,
                         onTheaterSelected = onTheaterSelected,
                     )
                 }
