@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <resources>
   <item type="id" name="screen_panel" />
-  <item type="id" name="screen_overlay_panel" />
   <item type="id" name="browse_panel" />
 </resources>
