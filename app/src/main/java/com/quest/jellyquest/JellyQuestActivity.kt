@@ -182,6 +182,7 @@ class JellyQuestActivity : AppSystemActivity() {
     } else {
       spawnEnvironment()
       spawnScreen()
+      startBumpers()
       // Auto-open browse panel if library cache is available
       if (jellyfinClient.cachedLibraries.value != null) {
         browsePanelVisible.value = true
@@ -231,11 +232,20 @@ class JellyQuestActivity : AppSystemActivity() {
   fun spawnScreenFromSystem() {
     spawnEnvironment()
     spawnScreen()
+    startBumpers()
     // Auto-open browse panel if library cache is available
     if (jellyfinClient.cachedLibraries.value != null) {
       browsePanelVisible.value = true
       spawnBrowsePanel()
     }
+  }
+
+  private fun startBumpers() {
+    exoPlayerSource.playBumpers(this, listOf(
+        R.raw.bumper_regal,
+        R.raw.bumper_chilly_dilly,
+        R.raw.bumper_snipe,
+    ))
   }
 
   private fun spawnScreen() {

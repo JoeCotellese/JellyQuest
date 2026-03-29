@@ -23,6 +23,10 @@ android {
 
   packaging { resources.excludes.add("META-INF/LICENSE") }
 
+  androidResources {
+    noCompress += listOf("webm", "mkv")
+  }
+
   lint {
     abortOnError = false
     checkReleaseBuilds = false

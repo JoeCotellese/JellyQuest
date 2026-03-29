@@ -3,6 +3,7 @@
 package com.quest.jellyquest.streaming
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import android.view.Surface
 import androidx.annotation.OptIn
@@ -24,9 +25,13 @@ class ExoPlayerSource(context: Context) : StreamSource {
 
     companion object {
         private const val TAG = "VirtualMonitor"
+        private const val BUMPER_VOLUME = 0.1f
     }
 
     val player: ExoPlayer = ExoPlayer.Builder(context).build()
+
+    var isBumperPlaying: Boolean = false
+        private set
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -87,6 +92,23 @@ class ExoPlayerSource(context: Context) : StreamSource {
         })
     }
 
+    /** Play bundled bumper videos in a loop at 50% volume until real content is selected. */
+    fun playBumpers(context: Context, bumperResIds: List<Int>) {
+        disconnect()
+        if (bumperResIds.isEmpty()) return
+        Log.i(TAG, "Playing ${bumperResIds.size} bumper(s) at 50% volume")
+        val items = bumperResIds.map { resId ->
+            val uri = Uri.parse("android.resource://${context.packageName}/$resId")
+            MediaItem.fromUri(uri)
+        }
+        player.setMediaItems(items)
+        player.repeatMode = Player.REPEAT_MODE_ALL
+        player.volume = BUMPER_VOLUME
+        player.prepare()
+        player.play()
+        isBumperPlaying = true
+    }
+
     override fun connect(uri: String) {
         connect(uri, startPositionMs = 0, startPaused = false)
     }
@@ -100,6 +122,8 @@ class ExoPlayerSource(context: Context) : StreamSource {
         if (startPositionMs > 0) {
             player.seekTo(startPositionMs)
         }
+        player.repeatMode = Player.REPEAT_MODE_OFF
+        player.volume = 1.0f
         player.prepare()
         if (!startPaused) {
             player.play()
@@ -109,6 +133,7 @@ class ExoPlayerSource(context: Context) : StreamSource {
     override fun disconnect() {
         player.stop()
         player.clearMediaItems()
+        isBumperPlaying = false
         _connectionState.value = ConnectionState.DISCONNECTED
         _mediaInfo.value = null
     }
