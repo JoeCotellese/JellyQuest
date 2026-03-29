@@ -85,6 +85,14 @@ class PlaybackReporterTest {
     }
 
     @Test
+    fun `computeProgressPercent returns minimum 1 for tiny position`() {
+        // 30 seconds into a 2hr movie = 0.4%, should clamp to 1 not 0
+        val thirtySecondsTicks = 300_000_000L // 30s in ticks
+        val twoHoursTicks = 72_000_000_000L
+        assertEquals(1, PlaybackReporter.computeProgressPercent(thirtySecondsTicks, twoHoursTicks))
+    }
+
+    @Test
     fun `computeRemainingMinutes returns correct value`() {
         // 2hr movie, 30 min in -> 90 min remaining
         // 30 min = 18_000_000_000 ticks, 2hr = 72_000_000_000 ticks
