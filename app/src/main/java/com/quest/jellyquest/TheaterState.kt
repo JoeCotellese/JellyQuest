@@ -26,10 +26,11 @@ val DEFAULT_SCREEN = ScreenConfig(
 )
 
 /**
- * Current theater configuration. Single source of truth for screen + seat state.
+ * Current theater configuration. Single source of truth for screen + seat + room state.
  * Updated when user selects a theater preset or changes seats.
  */
 data class TheaterState(
     val screen: ScreenConfig = DEFAULT_SCREEN,
     val riserHeightM: Float = 0f,
+    val room: RoomGeometry = TheaterEnvironment.computeRoom(THEATER_EXPERIENCES[2]),
 )
