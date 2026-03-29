@@ -44,7 +44,13 @@ import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.UIPanelSettings
 import com.meta.spatial.toolkit.VideoSurfacePanelRegistration
 import com.meta.spatial.toolkit.createPanelEntity
+import com.meta.spatial.spatialaudio.AudioSessionId
+import com.meta.spatial.spatialaudio.AudioSessionStereoOffsets
+import com.meta.spatial.spatialaudio.AudioType
+import com.meta.spatial.spatialaudio.SpatialAudioFeature
 import com.meta.spatial.vr.VRFeature
+import com.quest.jellyquest.audio.AudioSettings
+import com.quest.jellyquest.audio.RoomAcousticsController
 import com.quest.jellyquest.streaming.AuthState
 import com.quest.jellyquest.streaming.ExoPlayerSource
 import com.quest.jellyquest.streaming.JellyfinClient
@@ -88,6 +94,13 @@ class JellyQuestActivity : AppSystemActivity() {
   lateinit var jellyfinClient: JellyfinClient
   private lateinit var playbackReporter: PlaybackReporter
 
+  // Audio: spatial positioning and room acoustics
+  private val spatialAudioFeature = SpatialAudioFeature()
+  private lateinit var audioSettings: AudioSettings
+  private val roomAcousticsController = RoomAcousticsController()
+  val spatialAudioEnabled = mutableStateOf(true)
+  val roomAcousticsEnabled = mutableStateOf(true)
+
   // Current video dimensions for aspect-ratio fitting. Updated when ExoPlayer
   // reports a new video size; triggers screen respawn so the panel reshapes.
   private var videoWidth: Int = 0
@@ -102,6 +115,7 @@ class JellyQuestActivity : AppSystemActivity() {
         mutableListOf<SpatialFeature>(
             VRFeature(this),
             ComposeFeature(),
+            spatialAudioFeature,
         )
     if (BuildConfig.DEBUG) {
       features.add(CastInputForwardFeature(this))
@@ -122,6 +136,14 @@ class JellyQuestActivity : AppSystemActivity() {
         scope = activityScope,
     )
     Log.i(TAG, "ExoPlayer, Jellyfin client, and playback reporter initialized")
+
+    // Audio settings
+    audioSettings = AudioSettings(getSharedPreferences("audio_settings", MODE_PRIVATE))
+    spatialAudioEnabled.value = audioSettings.spatialAudioEnabled
+    roomAcousticsEnabled.value = audioSettings.roomAcousticsEnabled
+
+    // Wire spatial audio and room acoustics to ExoPlayer's audio session
+    exoPlayerSource.onPlayerReady = { wireSpatialAudio() }
 
     // Reshape screen panel when video dimensions change (aspect-ratio masking)
     activityScope.launch {
@@ -154,6 +176,7 @@ class JellyQuestActivity : AppSystemActivity() {
   }
 
   override fun onDestroy() {
+    roomAcousticsController.disable()
     activityScope.cancel()
     exoPlayerSource.disconnect()
     exoPlayerSource.release()
@@ -209,6 +232,8 @@ class JellyQuestActivity : AppSystemActivity() {
               // Capture position before stopping player (stop resets position to 0)
               val positionMs = exoPlayerSource.player.currentPosition
               exoPlayerSource.stop()
+              lastWiredAudioSessionId = 0
+              roomAcousticsController.disable()
               activityScope.launch {
                 playbackReporter.stopReportingAtPosition(positionMs)
               }
@@ -428,6 +453,59 @@ class JellyQuestActivity : AppSystemActivity() {
     Log.i(TAG, "Seat riser height: ${theaterState.value.riserHeightM}m")
     logScreenPosition()
     repositionTheater()
+
+    // Cross-fade room acoustics to match the new theater size
+    if (roomAcousticsEnabled.value) {
+      roomAcousticsController.applyRoom(theaterState.value.room, activityScope)
+    }
+  }
+
+  // Track the audio session ID that spatial audio was last wired for.
+  // Re-wires when session changes (new content, bumper→movie transition).
+  private var lastWiredAudioSessionId = 0
+
+  /** Wire spatial audio and room acoustics to the current ExoPlayer audio session. */
+  private fun wireSpatialAudio() {
+    val screenEnt = screenEntity ?: return
+    val currentSessionId = exoPlayerSource.player.audioSessionId
+
+    // Layer 1: Spatial audio — anchor sound to screen position via Dolby Atmos
+    if (spatialAudioEnabled.value && currentSessionId != lastWiredAudioSessionId) {
+      val regId = 1
+      spatialAudioFeature.registerAudioSessionId(regId, currentSessionId)
+
+      val audioFormat = exoPlayerSource.player.audioFormat
+      val channelCount = audioFormat?.channelCount ?: 2
+
+      when {
+        channelCount > 2 -> {
+          // Multichannel (5.1/7.1/Atmos) — native SOUNDFIELD rendering
+          screenEnt.setComponent(AudioSessionId(regId, AudioType.SOUNDFIELD))
+        }
+        channelCount == 2 -> {
+          // Stereo — position L/R channels in screen's local space
+          screenEnt.setComponent(AudioSessionId(regId, AudioType.STEREO))
+          screenEnt.setComponent(AudioSessionStereoOffsets(
+              left = Vector3(-1f, 0f, 0f),
+              right = Vector3(1f, 0f, 0f),
+          ))
+        }
+        else -> {
+          // Mono
+          screenEnt.setComponent(AudioSessionId(regId, AudioType.MONO))
+        }
+      }
+
+      lastWiredAudioSessionId = currentSessionId
+      Log.i(TAG, "Spatial audio wired: channels=$channelCount sessionId=$currentSessionId")
+    }
+
+    // Layer 2: Room acoustics — reverb matched to theater size
+    if (roomAcousticsEnabled.value) {
+      roomAcousticsController.enable(currentSessionId)
+      roomAcousticsController.applyRoom(theaterState.value.room, activityScope)
+      Log.i(TAG, "Room acoustics enabled for ${theaterState.value.screen.label}")
+    }
   }
 
   /** Respawn all positioned entities using current anchor and theater state. */
@@ -526,6 +604,9 @@ class JellyQuestActivity : AppSystemActivity() {
                           )
                           val startPaused = resumeMs > 0
                           Log.i(TAG, "Media selected: '${freshItem.name}' resumeMs=$resumeMs startPaused=$startPaused")
+                          // Reset spatial audio so it re-wires with the movie's audio session
+                          lastWiredAudioSessionId = 0
+                          roomAcousticsController.disable()
                           exoPlayerSource.connect(url, resumeMs, startPaused)
                           playbackReporter.startReporting(freshItem.id)
 
@@ -538,6 +619,25 @@ class JellyQuestActivity : AppSystemActivity() {
                       currentScreen = theaterState.value.screen,
                       onTheaterSelected = { theater, seat ->
                         applyTheaterPreset(theater, seat)
+                      },
+                      spatialAudioEnabled = spatialAudioEnabled.value,
+                      onSpatialAudioToggled = { enabled ->
+                        spatialAudioEnabled.value = enabled
+                        audioSettings.spatialAudioEnabled = enabled
+                        Log.i(TAG, "Spatial audio toggled: $enabled")
+                        // Takes effect on next STATE_READY
+                      },
+                      roomAcousticsEnabled = roomAcousticsEnabled.value,
+                      onRoomAcousticsToggled = { enabled ->
+                        roomAcousticsEnabled.value = enabled
+                        audioSettings.roomAcousticsEnabled = enabled
+                        if (enabled) {
+                          roomAcousticsController.enable(exoPlayerSource.player.audioSessionId)
+                          roomAcousticsController.applyRoom(theaterState.value.room, activityScope)
+                        } else {
+                          roomAcousticsController.disable()
+                        }
+                        Log.i(TAG, "Room acoustics toggled: $enabled")
                       },
                   )
                 }

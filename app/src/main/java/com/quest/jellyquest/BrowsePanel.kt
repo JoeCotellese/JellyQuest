@@ -55,6 +55,10 @@ fun BrowsePanel(
     onMediaSelected: (JellyfinItem) -> Unit,
     currentScreen: ScreenConfig,
     onTheaterSelected: (theater: TheaterExperience, seat: SeatPosition) -> Unit,
+    spatialAudioEnabled: Boolean = true,
+    onSpatialAudioToggled: (Boolean) -> Unit = {},
+    roomAcousticsEnabled: Boolean = true,
+    onRoomAcousticsToggled: (Boolean) -> Unit = {},
 ) {
     val authState by jellyfinClient.authState.collectAsState()
     val errorMessage by jellyfinClient.errorMessage.collectAsState()
@@ -120,6 +124,10 @@ fun BrowsePanel(
                     TheaterPickerContent(
                         currentScreen = currentScreen,
                         onTheaterSelected = onTheaterSelected,
+                        spatialAudioEnabled = spatialAudioEnabled,
+                        onSpatialAudioToggled = onSpatialAudioToggled,
+                        roomAcousticsEnabled = roomAcousticsEnabled,
+                        onRoomAcousticsToggled = onRoomAcousticsToggled,
                     )
                 }
             }

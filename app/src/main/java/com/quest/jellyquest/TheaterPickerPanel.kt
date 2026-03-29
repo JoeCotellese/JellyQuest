@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.meta.spatial.uiset.button.PrimaryButton
 import com.meta.spatial.uiset.button.SecondaryButton
 import com.meta.spatial.uiset.control.SpatialRadioButton
+import com.meta.spatial.uiset.control.SpatialSwitch
 import com.meta.spatial.uiset.theme.SpatialTheme
 
 /**
@@ -34,6 +35,10 @@ import com.meta.spatial.uiset.theme.SpatialTheme
 fun TheaterPickerContent(
     currentScreen: ScreenConfig,
     onTheaterSelected: (theater: TheaterExperience, seat: SeatPosition) -> Unit,
+    spatialAudioEnabled: Boolean = true,
+    onSpatialAudioToggled: (Boolean) -> Unit = {},
+    roomAcousticsEnabled: Boolean = true,
+    onRoomAcousticsToggled: (Boolean) -> Unit = {},
 ) {
     // Find which theater and seat are currently active based on screen dimensions
     var activeTheaterIndex by remember {
@@ -136,6 +141,56 @@ fun TheaterPickerContent(
                     }
                 }
             }
+        }
+
+        // Audio toggles
+        Spacer(modifier = Modifier.size(16.dp))
+
+        Text(
+            text = "Audio",
+            style = SpatialTheme.typography.headline3Strong.copy(
+                color = SpatialTheme.colorScheme.primaryAlphaBackground,
+            ),
+        )
+
+        Spacer(modifier = Modifier.size(8.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Spatial Audio",
+                style = SpatialTheme.typography.body1.copy(
+                    color = SpatialTheme.colorScheme.primaryAlphaBackground,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            SpatialSwitch(
+                checked = spatialAudioEnabled,
+                onCheckedChange = onSpatialAudioToggled,
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Room Acoustics",
+                style = SpatialTheme.typography.body1.copy(
+                    color = SpatialTheme.colorScheme.primaryAlphaBackground,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            SpatialSwitch(
+                checked = roomAcousticsEnabled,
+                onCheckedChange = onRoomAcousticsToggled,
+            )
         }
     }
 }
