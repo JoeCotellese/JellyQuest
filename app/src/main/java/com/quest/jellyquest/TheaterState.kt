@@ -1,7 +1,7 @@
 package com.quest.jellyquest
 
 /** Height of the virtual stage where the screen bottom sits, in meters. */
-const val STAGE_HEIGHT = 1.2f
+const val STAGE_HEIGHT = 1.0f
 
 /**
  * Screen dimensions and position. Self-contained — no index references.
@@ -20,9 +20,9 @@ data class ScreenConfig(
 /** Default screen: PLF middle seat. */
 val DEFAULT_SCREEN = ScreenConfig(
     label = "Premium Large Format",
-    widthM = 14.0f,
-    heightM = 5.86f,
-    distanceM = 12.0f,
+    widthM = 16.0f,
+    heightM = 6.69f,
+    distanceM = 22.0f,
 )
 
 /**

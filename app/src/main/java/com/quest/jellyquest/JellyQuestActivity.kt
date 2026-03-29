@@ -167,10 +167,10 @@ class JellyQuestActivity : AppSystemActivity() {
     scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
 
     scene.setLightingEnvironment(
-        ambientColor = Vector3(0.3f),
-        sunColor = Vector3(2.0f, 2.0f, 2.0f),
+        ambientColor = Vector3(0.05f),
+        sunColor = Vector3(0.0f, 0.0f, 0.0f),
         sunDirection = -Vector3(1.0f, 3.0f, -2.0f),
-        environmentIntensity = 0.1f,
+        environmentIntensity = 0.0f,
     )
 
     scene.setViewOrigin(0.0f, 0.0f, 0.0f)
@@ -391,8 +391,8 @@ class JellyQuestActivity : AppSystemActivity() {
 
     // Armrests
     val armrestBox = Box(
-        Vector3(-ViewerLayout.ARMREST_LENGTH / 2f, -ViewerLayout.ARMREST_HEIGHT / 2f, -ViewerLayout.ARMREST_WIDTH / 2f),
-        Vector3(ViewerLayout.ARMREST_LENGTH / 2f, ViewerLayout.ARMREST_HEIGHT / 2f, ViewerLayout.ARMREST_WIDTH / 2f),
+        Vector3(-ViewerLayout.ARMREST_WIDTH / 2f, -ViewerLayout.ARMREST_HEIGHT / 2f, -ViewerLayout.ARMREST_LENGTH / 2f),
+        Vector3(ViewerLayout.ARMREST_WIDTH / 2f, ViewerLayout.ARMREST_HEIGHT / 2f, ViewerLayout.ARMREST_LENGTH / 2f),
     )
     armrestEntities = listOf(
         createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = true)),
