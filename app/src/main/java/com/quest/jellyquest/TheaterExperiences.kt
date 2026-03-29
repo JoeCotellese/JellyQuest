@@ -35,12 +35,12 @@ val THEATER_EXPERIENCES = listOf(
         name = "Multiplex",
         description = "Standard moviegoing — 12m screen",
         screenWidthM = 12.0f,
-        screenHeightM = 5.02f,
+        screenHeightM = 5.0f,
         ceilingHeightM = 10.0f,
         seats = listOf(
-            SeatPosition("Front", 10.5f, riserHeightM = 0.0f),
-            SeatPosition("Middle", 18.0f, riserHeightM = 1.60f),
-            SeatPosition("Back", 28.0f, riserHeightM = 3.73f),
+            SeatPosition("Front", 11.42f, riserHeightM = 0.0f),
+            SeatPosition("Middle", 14.63f, riserHeightM = 0.68f),
+            SeatPosition("Back", 18.91f, riserHeightM = 1.60f),
         ),
     ),
     TheaterExperience(

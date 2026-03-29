@@ -21,11 +21,11 @@ class TheaterEnvironmentTest {
 
     @Test
     fun `multiplex geometry has correct dimensions`() {
-        val experience = THEATER_EXPERIENCES[1] // Multiplex: 12m screen, seats 10.5-28m
+        val experience = THEATER_EXPERIENCES[1] // Multiplex: 12m screen, seats 11.42-18.91m
         val room = TheaterEnvironment.computeRoom(experience)
 
         assertEquals(16.0f, room.widthFront, 0.01f) // 12 + 4
-        assertEquals(33.0f, room.depth, 0.01f) // 28 + 5
+        assertEquals(23.91f, room.depth, 0.01f) // 18.91 + 5
         assertEquals(10.0f, room.ceilingHeight, 0.01f)
     }
 
