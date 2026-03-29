@@ -10,43 +10,43 @@ class TheaterEnvironmentTest {
 
     @Test
     fun `screening room geometry has correct dimensions`() {
-        val experience = THEATER_EXPERIENCES[0] // Screening Room: 7m screen, seats 3.5-10m
+        val experience = THEATER_EXPERIENCES[0] // Screening Room: 7m screen, seats 6.5-18m
         val room = TheaterEnvironment.computeRoom(experience)
 
         assertEquals(11.0f, room.widthFront, 0.01f) // 7 + 4
         assertTrue(room.widthBack > room.widthFront) // angled walls
-        assertEquals(15.0f, room.depth, 0.01f) // 10 + 5
-        assertEquals(6.13f, room.ceilingHeight, 0.01f) // 1.2 + 2.93 + 2
+        assertEquals(23.0f, room.depth, 0.01f) // 18 + 5
+        assertEquals(6.5f, room.ceilingHeight, 0.01f)
     }
 
     @Test
     fun `multiplex geometry has correct dimensions`() {
-        val experience = THEATER_EXPERIENCES[1] // Multiplex: 10m screen, seats 5-16m
+        val experience = THEATER_EXPERIENCES[1] // Multiplex: 12m screen, seats 10.5-28m
         val room = TheaterEnvironment.computeRoom(experience)
 
-        assertEquals(14.0f, room.widthFront, 0.01f)
-        assertEquals(21.0f, room.depth, 0.01f) // 16 + 5
-        assertEquals(7.38f, room.ceilingHeight, 0.01f)
+        assertEquals(16.0f, room.widthFront, 0.01f) // 12 + 4
+        assertEquals(33.0f, room.depth, 0.01f) // 28 + 5
+        assertEquals(10.0f, room.ceilingHeight, 0.01f)
     }
 
     @Test
     fun `PLF geometry has correct dimensions`() {
-        val experience = THEATER_EXPERIENCES[2] // PLF: 14m screen, seats 7-20m
+        val experience = THEATER_EXPERIENCES[2] // PLF: 16m screen, seats 14-32m
         val room = TheaterEnvironment.computeRoom(experience)
 
-        assertEquals(18.0f, room.widthFront, 0.01f)
-        assertEquals(25.0f, room.depth, 0.01f) // 20 + 5
-        assertEquals(9.06f, room.ceilingHeight, 0.01f)
+        assertEquals(20.0f, room.widthFront, 0.01f) // 16 + 4
+        assertEquals(37.0f, room.depth, 0.01f) // 32 + 5
+        assertEquals(12.0f, room.ceilingHeight, 0.01f)
     }
 
     @Test
     fun `IMAX geometry has correct dimensions`() {
-        val experience = THEATER_EXPERIENCES[3] // IMAX: 22m screen, seats 10-25m
+        val experience = THEATER_EXPERIENCES[3] // IMAX: 22m screen, seats 19-38m
         val room = TheaterEnvironment.computeRoom(experience)
 
-        assertEquals(26.0f, room.widthFront, 0.01f)
-        assertEquals(30.0f, room.depth, 0.01f) // 25 + 5
-        assertEquals(15.2f, room.ceilingHeight, 0.01f)
+        assertEquals(26.0f, room.widthFront, 0.01f) // 22 + 4
+        assertEquals(43.0f, room.depth, 0.01f) // 38 + 5
+        assertEquals(18.0f, room.ceilingHeight, 0.01f)
     }
 
     // --- Wall angle ---
@@ -86,6 +86,35 @@ class TheaterEnvironmentTest {
             assertTrue(
                 "${experience.name}: backDistance (${room.backDistance}) should be > furthest seat ($furthestSeat)",
                 room.backDistance > furthestSeat,
+            )
+        }
+    }
+
+    // --- Front row minimum viewing distance ---
+
+    @Test
+    fun `front row distance is at least 0_87x screen width for all presets`() {
+        THEATER_EXPERIENCES.forEach { experience ->
+            val frontSeat = experience.seats.minByOrNull { it.distanceM }!!
+            val minDistance = experience.screenWidthM * 0.87f
+            assertTrue(
+                "${experience.name}: front row (${frontSeat.distanceM}m) should be >= 0.87 × screen width ($minDistance m)",
+                frontSeat.distanceM >= minDistance,
+            )
+        }
+    }
+
+    // --- Ceiling height from preset ---
+
+    @Test
+    fun `ceiling height matches preset value for all presets`() {
+        THEATER_EXPERIENCES.forEach { experience ->
+            val room = TheaterEnvironment.computeRoom(experience)
+            assertEquals(
+                "${experience.name}: ceiling should match preset",
+                experience.ceilingHeightM,
+                room.ceilingHeight,
+                0.01f,
             )
         }
     }

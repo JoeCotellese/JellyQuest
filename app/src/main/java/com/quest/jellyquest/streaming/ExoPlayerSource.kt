@@ -33,6 +33,10 @@ class ExoPlayerSource(context: Context) : StreamSource {
     var isBumperPlaying: Boolean = false
         private set
 
+    /** Called when ExoPlayer transitions to STATE_READY. Used by the activity
+     *  to wire spatial audio and room acoustics to the player's audio session. */
+    var onPlayerReady: (() -> Unit)? = null
+
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
@@ -52,6 +56,8 @@ class ExoPlayerSource(context: Context) : StreamSource {
                         } else {
                             ConnectionState.PAUSED
                         }
+                        logStreamFormats()
+                        onPlayerReady?.invoke()
                     }
                     Player.STATE_ENDED, Player.STATE_IDLE -> {
                         _connectionState.value = ConnectionState.DISCONNECTED
@@ -90,6 +96,16 @@ class ExoPlayerSource(context: Context) : StreamSource {
                 _connectionState.value = ConnectionState.ERROR
             }
         })
+    }
+
+    private fun logStreamFormats() {
+        val videoFormat = player.videoFormat
+        val audioFormat = player.audioFormat
+        Log.i(TAG, "Stream video: ${videoFormat?.width}x${videoFormat?.height} " +
+            "codec=${videoFormat?.codecs} bitrate=${videoFormat?.bitrate}")
+        Log.i(TAG, "Stream audio: channels=${audioFormat?.channelCount} " +
+            "sampleRate=${audioFormat?.sampleRate} codec=${audioFormat?.codecs} " +
+            "bitrate=${audioFormat?.bitrate}")
     }
 
     /** Play bundled bumper videos in a loop at 50% volume until real content is selected. */

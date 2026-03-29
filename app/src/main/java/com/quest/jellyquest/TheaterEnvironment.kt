@@ -12,7 +12,6 @@ object TheaterEnvironment {
     // Room sizing relative to theater preset
     const val SIDE_MARGIN = 2.0f          // meters beyond screen width, per side
     const val BACK_MARGIN = 5.0f          // meters behind furthest seat
-    const val CEILING_CLEARANCE = 2.0f    // meters above screen top
     const val WALL_THICKNESS = 0.15f      // 15cm thick walls
     const val WALL_ANGLE_TAN = 0.07f      // tan(~4°), per side — back is wider than front
 
@@ -29,12 +28,11 @@ object TheaterEnvironment {
      */
     fun computeRoom(experience: TheaterExperience): RoomGeometry {
         val furthestSeat = experience.seats.maxOf { it.distanceM }
-        val screenTop = experience.screenBottomM + experience.screenHeightM
 
         val widthFront = experience.screenWidthM + SIDE_MARGIN * 2
         val depth = furthestSeat + BACK_MARGIN
         val widthBack = widthFront + depth * WALL_ANGLE_TAN * 2
-        val ceilingHeight = screenTop + CEILING_CLEARANCE
+        val ceilingHeight = experience.ceilingHeightM
 
         // frontDistance: screen wall is 1m past the screen position (screen sits slightly proud)
         // backDistance: how far behind the anchor the back wall sits
