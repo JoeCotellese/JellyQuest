@@ -372,7 +372,8 @@ private fun BrowseListItem(
     item: JellyfinItem,
     onClick: () -> Unit,
 ) {
-    val hasProgress = !item.isFolder && item.runTimeTicks > 0 && item.playbackPositionTicks > 0
+    val hasPosition = !item.isFolder && item.playbackPositionTicks > 0
+    val hasProgress = hasPosition && item.runTimeTicks > 0
     val fullyWatched = hasProgress && PlaybackReporter.isFullyWatched(
         item.playbackPositionTicks, item.runTimeTicks,
     )
@@ -420,6 +421,12 @@ private fun BrowseListItem(
                 Spacer(modifier = Modifier.size(8.dp))
                 Text(
                     text = "${remainingMin} min left",
+                    style = SpatialTheme.typography.body2.copy(color = DraculaOrange),
+                )
+            } else if (hasPosition && !hasProgress) {
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = "In Progress",
                     style = SpatialTheme.typography.body2.copy(color = DraculaOrange),
                 )
             }

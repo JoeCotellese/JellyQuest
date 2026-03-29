@@ -120,7 +120,7 @@ class PlaybackReporter(
         /** Compute what percentage of the content has been watched (0-100). */
         fun computeProgressPercent(positionTicks: Long, runtimeTicks: Long): Int {
             if (runtimeTicks <= 0 || positionTicks <= 0) return 0
-            return (positionTicks * 100 / runtimeTicks).toInt().coerceIn(0, 100)
+            return (positionTicks * 100 / runtimeTicks).toInt().coerceIn(1, 100)
         }
 
         /** Compute how many minutes remain. */

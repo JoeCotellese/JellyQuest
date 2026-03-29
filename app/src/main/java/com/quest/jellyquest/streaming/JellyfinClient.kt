@@ -398,6 +398,16 @@ class JellyfinClient(private val context: Context) {
                     ),
                 )
             }
+            // Update local cache so browse panel shows current progress without re-fetching.
+            val (updatedItems, updatedLibraries) = updateCachedItemPosition(
+                cachedItems = _cachedItems.value,
+                cachedLibraries = _cachedLibraries.value,
+                itemId = itemId,
+                positionTicks = positionTicks,
+            )
+            _cachedItems.value = updatedItems
+            _cachedLibraries.value = updatedLibraries
+            saveCacheToDisk(updatedLibraries ?: emptyList(), updatedItems)
             Log.i(TAG, "Reported playback stopped: $itemId at ${positionTicks / 10_000}ms")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to report playback stopped", e)
@@ -471,4 +481,25 @@ class JellyfinClient(private val context: Context) {
         playbackPositionTicks = this.userData?.playbackPositionTicks ?: 0,
         runTimeTicks = this.runTimeTicks ?: 0,
     )
+}
+
+/**
+ * Pure function that returns updated cache maps with the given item's position replaced.
+ * Searches all library lists in [cachedItems] and [cachedLibraries] for the item by ID.
+ */
+fun updateCachedItemPosition(
+    cachedItems: Map<UUID, List<JellyfinItem>>,
+    cachedLibraries: List<JellyfinItem>?,
+    itemId: UUID,
+    positionTicks: Long,
+): Pair<Map<UUID, List<JellyfinItem>>, List<JellyfinItem>?> {
+    val updatedItems = cachedItems.mapValues { (_, items) ->
+        items.map { item ->
+            if (item.id == itemId) item.copy(playbackPositionTicks = positionTicks) else item
+        }
+    }
+    val updatedLibraries = cachedLibraries?.map { item ->
+        if (item.id == itemId) item.copy(playbackPositionTicks = positionTicks) else item
+    }
+    return updatedItems to updatedLibraries
 }
