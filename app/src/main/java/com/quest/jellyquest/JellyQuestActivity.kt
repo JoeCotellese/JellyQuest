@@ -326,61 +326,55 @@ class JellyQuestActivity : AppSystemActivity() {
     val screenTop = screen.screenBottomM + screen.heightM
     val screenWallPose = TheaterLayout.screenWallPose(a, screen, room)
 
-    // DEBUG: bright colors to identify walls
-    // Red=front/screen, Blue=back, Green=left, Yellow=right, White=ceiling
-    val DEBUG_FRONT = Color4(0.8f, 0.1f, 0.1f, 1f)   // Red
-    val DEBUG_BACK = Color4(0.1f, 0.1f, 0.8f, 1f)     // Blue
-    val DEBUG_LEFT = Color4(0.1f, 0.8f, 0.1f, 1f)     // Green
-    val DEBUG_RIGHT = Color4(0.8f, 0.8f, 0.1f, 1f)    // Yellow
-    val DEBUG_CEILING = Color4(0.8f, 0.8f, 0.8f, 1f)  // White
+    val c = TheaterEnvironment.colors
 
     wallEntities = listOf(
-        // Screen wall — left flank
+        // Screen wall — left flank (extends along local X, thin along Z)
         createBoxEntity(
             Box(Vector3(-room.widthFront / 2f, 0f, -t / 2f), Vector3(-screenHalfW, room.ceilingHeight, t / 2f)),
-            DEBUG_FRONT,
+            c.screenWall,
             screenWallPose,
         ),
         // Screen wall — right flank
         createBoxEntity(
             Box(Vector3(screenHalfW, 0f, -t / 2f), Vector3(room.widthFront / 2f, room.ceilingHeight, t / 2f)),
-            DEBUG_FRONT,
+            c.screenWall,
             screenWallPose,
         ),
         // Screen wall — strip above screen
         createBoxEntity(
             Box(Vector3(-screenHalfW, screenTop, -t / 2f), Vector3(screenHalfW, room.ceilingHeight, t / 2f)),
-            DEBUG_FRONT,
+            c.screenWall,
             screenWallPose,
         ),
         // Screen wall — strip below screen
         createBoxEntity(
             Box(Vector3(-screenHalfW, 0f, -t / 2f), Vector3(screenHalfW, screen.screenBottomM, t / 2f)),
-            DEBUG_FRONT,
+            c.screenWall,
             screenWallPose,
         ),
-        // Back wall
+        // Back wall (extends along local X, thin along Z)
         createBoxEntity(
             Box(Vector3(-room.widthBack / 2f, 0f, -t / 2f), Vector3(room.widthBack / 2f, room.ceilingHeight, t / 2f)),
-            DEBUG_BACK,
+            c.backWall,
             TheaterLayout.backWallPose(a, room),
         ),
         // Left wall — extends along local Z (front-to-back), thin along local X
         createBoxEntity(
             Box(Vector3(-t / 2f, 0f, -wallLength / 2f), Vector3(t / 2f, room.ceilingHeight, wallLength / 2f)),
-            DEBUG_LEFT,
+            c.sideWall,
             TheaterLayout.leftWallPose(a, screen, room),
         ),
         // Right wall — extends along local Z (front-to-back), thin along local X
         createBoxEntity(
             Box(Vector3(-t / 2f, 0f, -wallLength / 2f), Vector3(t / 2f, room.ceilingHeight, wallLength / 2f)),
-            DEBUG_RIGHT,
+            c.sideWall,
             TheaterLayout.rightWallPose(a, screen, room),
         ),
-        // Ceiling
+        // Ceiling (extends along local X and Z, thin along Y)
         createBoxEntity(
             Box(Vector3(-room.widthBack / 2f, -t / 2f, -wallLength / 2f), Vector3(room.widthBack / 2f, t / 2f, wallLength / 2f)),
-            DEBUG_CEILING,
+            c.ceiling,
             TheaterLayout.ceilingPose(a, screen, room),
         ),
     )
@@ -391,8 +385,8 @@ class JellyQuestActivity : AppSystemActivity() {
         Vector3(ViewerLayout.ARMREST_LENGTH / 2f, ViewerLayout.ARMREST_HEIGHT / 2f, ViewerLayout.ARMREST_WIDTH / 2f),
     )
     armrestEntities = listOf(
-        createBoxEntity(armrestBox, TheaterEnvironment.ARMREST_COLOR, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = true)),
-        createBoxEntity(armrestBox, TheaterEnvironment.ARMREST_COLOR, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = false)),
+        createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = true)),
+        createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = false)),
     )
   }
 

@@ -20,13 +20,8 @@ object TheaterEnvironment {
     const val FRAME_BORDER = 0.08f        // 8cm wide border
     const val FRAME_DEPTH = 0.03f         // 3cm proud of screen wall
 
-    // Colors — subtle dark grays, distinguishable from each other
-    val SIDE_WALL_COLOR = Color4(0.06f, 0.06f, 0.065f, 1f)
-    val BACK_WALL_COLOR = Color4(0.07f, 0.07f, 0.07f, 1f)
-    val SCREEN_WALL_COLOR = Color4(0.04f, 0.04f, 0.045f, 1f)
-    val CEILING_COLOR = Color4(0.05f, 0.05f, 0.055f, 1f)
-    val SCREEN_FRAME_COLOR = Color4(0.02f, 0.02f, 0.02f, 1f)
-    val ARMREST_COLOR = Color4(0.10f, 0.10f, 0.10f, 1f)
+    // Active color scheme — swap to DEBUG_COLORS for wall orientation debugging
+    var colors: RoomColors = THEATER_COLORS
 
     /**
      * Compute room geometry from a theater experience preset.
@@ -68,35 +63,46 @@ object TheaterEnvironment {
         val halfH = screenH / 2f
         val b = FRAME_BORDER
         val d = FRAME_DEPTH
+        val frameColor = colors.screenFrame
 
         return listOf(
-            // Top bar
-            BoxDef(
-                min = Vector3(-halfW - b, halfH, 0f),
-                max = Vector3(halfW + b, halfH + b, d),
-                color = SCREEN_FRAME_COLOR,
-            ),
-            // Bottom bar
-            BoxDef(
-                min = Vector3(-halfW - b, -halfH - b, 0f),
-                max = Vector3(halfW + b, -halfH, d),
-                color = SCREEN_FRAME_COLOR,
-            ),
-            // Left bar
-            BoxDef(
-                min = Vector3(-halfW - b, -halfH, 0f),
-                max = Vector3(-halfW, halfH, d),
-                color = SCREEN_FRAME_COLOR,
-            ),
-            // Right bar
-            BoxDef(
-                min = Vector3(halfW, -halfH, 0f),
-                max = Vector3(halfW + b, halfH, d),
-                color = SCREEN_FRAME_COLOR,
-            ),
+            BoxDef(min = Vector3(-halfW - b, halfH, 0f), max = Vector3(halfW + b, halfH + b, d), color = frameColor),
+            BoxDef(min = Vector3(-halfW - b, -halfH - b, 0f), max = Vector3(halfW + b, -halfH, d), color = frameColor),
+            BoxDef(min = Vector3(-halfW - b, -halfH, 0f), max = Vector3(-halfW, halfH, d), color = frameColor),
+            BoxDef(min = Vector3(halfW, -halfH, 0f), max = Vector3(halfW + b, halfH, d), color = frameColor),
         )
     }
 }
+
+/** Color scheme for room geometry surfaces. */
+data class RoomColors(
+    val screenWall: Color4,
+    val backWall: Color4,
+    val sideWall: Color4,
+    val ceiling: Color4,
+    val screenFrame: Color4,
+    val armrest: Color4,
+)
+
+/** Production colors — subtle dark grays, distinguishable from each other. */
+val THEATER_COLORS = RoomColors(
+    screenWall = Color4(0.04f, 0.04f, 0.045f, 1f),
+    backWall = Color4(0.07f, 0.07f, 0.07f, 1f),
+    sideWall = Color4(0.06f, 0.06f, 0.065f, 1f),
+    ceiling = Color4(0.05f, 0.05f, 0.055f, 1f),
+    screenFrame = Color4(0.02f, 0.02f, 0.02f, 1f),
+    armrest = Color4(0.10f, 0.10f, 0.10f, 1f),
+)
+
+/** Debug colors — bright, distinct per surface for orientation verification. */
+val DEBUG_COLORS = RoomColors(
+    screenWall = Color4(0.8f, 0.1f, 0.1f, 1f),   // Red
+    backWall = Color4(0.1f, 0.1f, 0.8f, 1f),      // Blue
+    sideWall = Color4(0.1f, 0.8f, 0.1f, 1f),      // Green
+    ceiling = Color4(0.8f, 0.8f, 0.8f, 1f),       // White
+    screenFrame = Color4(0.8f, 0.0f, 0.8f, 1f),   // Magenta
+    armrest = Color4(0.8f, 0.5f, 0.0f, 1f),        // Orange
+)
 
 /**
  * Room dimensions derived from a theater preset. All values in meters.
