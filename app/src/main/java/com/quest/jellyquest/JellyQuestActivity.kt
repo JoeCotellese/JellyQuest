@@ -363,16 +363,18 @@ class JellyQuestActivity : AppSystemActivity() {
       spawnProceduralEnvironment(a, envPos, screen, room)
     }
 
-    // Armrests: always SDK entities (viewer-relative positioning)
-    val c = TheaterEnvironment.colors
-    val armrestBox = Box(
-        Vector3(-ViewerLayout.ARMREST_WIDTH / 2f, -ViewerLayout.ARMREST_HEIGHT / 2f, -ViewerLayout.ARMREST_LENGTH / 2f),
-        Vector3(ViewerLayout.ARMREST_WIDTH / 2f, ViewerLayout.ARMREST_HEIGHT / 2f, ViewerLayout.ARMREST_LENGTH / 2f),
-    )
-    armrestEntities = listOf(
-        createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = true)),
-        createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = false)),
-    )
+    // Armrests: only for procedural environments (GLB model has its own)
+    if (asset == null) {
+      val c = TheaterEnvironment.colors
+      val armrestBox = Box(
+          Vector3(-ViewerLayout.ARMREST_WIDTH / 2f, -ViewerLayout.ARMREST_HEIGHT / 2f, -ViewerLayout.ARMREST_LENGTH / 2f),
+          Vector3(ViewerLayout.ARMREST_WIDTH / 2f, ViewerLayout.ARMREST_HEIGHT / 2f, ViewerLayout.ARMREST_LENGTH / 2f),
+      )
+      armrestEntities = listOf(
+          createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = true)),
+          createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = false)),
+      )
+    }
   }
 
   private fun spawnProceduralEnvironment(a: Anchor, envPos: Vector3, screen: ScreenConfig, room: RoomGeometry) {

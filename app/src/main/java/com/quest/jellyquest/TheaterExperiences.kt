@@ -41,9 +41,9 @@ val THEATER_EXPERIENCES = listOf(
         screenHeightM = 5.0f,
         ceilingHeightM = 10.0f,
         seats = listOf(
-            SeatPosition("Front", 11.42f, riserHeightM = 1.60f),
-            SeatPosition("Middle", 14.63f, riserHeightM = 2.08f),
-            SeatPosition("Back", 18.91f, riserHeightM = 2.71f),
+            SeatPosition("Front", 11.42f, riserHeightM = 1.55f),
+            SeatPosition("Middle", 14.63f, riserHeightM = 2.03f),
+            SeatPosition("Back", 18.91f, riserHeightM = 2.66f),
         ),
         environmentAsset = "cinema_multiplex.glb",
     ),

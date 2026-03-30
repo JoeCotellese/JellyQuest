@@ -73,7 +73,7 @@ object TheaterLayout {
      * rather than the aisle.
      */
     private const val GLB_SCREEN_WALL_OFFSET = 0.2f
-    private const val GLB_LATERAL_OFFSET = 0.55f  // shift model left so viewer sits in a seat
+    private const val GLB_LATERAL_OFFSET = 0.945f  // Seats_All translation (1.095) - fine-tune (0.15)
 
     fun glbEnvironmentPose(anchor: Anchor, screen: ScreenConfig): Pose {
         val xz = anchor.position +
