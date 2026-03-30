@@ -88,6 +88,7 @@ class JellyQuestActivity : AppSystemActivity() {
   private var floorEntity: Entity? = null
   private var wallEntities: List<Entity> = emptyList()
   private var armrestEntities: List<Entity> = emptyList()
+  private var environmentModelEntity: Entity? = null
 
   // Jellyfin + ExoPlayer
   lateinit var exoPlayerSource: ExoPlayerSource
@@ -190,7 +191,7 @@ class JellyQuestActivity : AppSystemActivity() {
     scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
 
     scene.setLightingEnvironment(
-        ambientColor = Vector3(0.05f),
+        ambientColor = Vector3(3.0f),
         sunColor = Vector3(0.0f, 0.0f, 0.0f),
         sunDirection = -Vector3(1.0f, 3.0f, -2.0f),
         environmentIntensity = 0.0f,
@@ -315,6 +316,10 @@ class JellyQuestActivity : AppSystemActivity() {
     browsePanelEntity = null
   }
 
+  private fun currentExperience(): TheaterExperience? {
+    return THEATER_EXPERIENCES.firstOrNull { it.name == theaterState.value.screen.label }
+  }
+
   private fun spawnEnvironment() {
     val a = anchor ?: return
     skyboxEntity?.destroy()
@@ -323,10 +328,13 @@ class JellyQuestActivity : AppSystemActivity() {
     wallEntities = emptyList()
     armrestEntities.forEach { it.destroy() }
     armrestEntities = emptyList()
+    environmentModelEntity?.destroy()
+    environmentModelEntity = null
 
     val envPos = TheaterLayout.environmentPosition(a)
     val screen = theaterState.value.screen
     val room = theaterState.value.room
+    val experience = currentExperience()
 
     // Skybox: near-black sphere centered on the user
     skyboxEntity = Entity.create(listOf(
@@ -338,6 +346,36 @@ class JellyQuestActivity : AppSystemActivity() {
         Transform(Pose(envPos)),
     ))
 
+    val asset = experience?.environmentAsset
+    if (asset != null) {
+      // GLB environment — baked 3D model replaces procedural walls, floor, and ceiling
+      val glbPose = TheaterLayout.glbEnvironmentPose(a, screen)
+      environmentModelEntity = Entity.create(listOf(
+          Mesh(asset.toUri(), hittable = MeshCollision.NoCollision),
+          Transform(Pose(glbPose.t, glbPose.q)),
+      ))
+      Log.i(TAG, "GLB environment loaded: $asset pos=${glbPose.t} rot=${glbPose.q}")
+      Log.i(TAG, "  Anchor pos=${a.position} fwd=${a.forward}")
+      Log.i(TAG, "  Model origin at screen wall, extends -Z toward viewer (30m deep)")
+      Log.i(TAG, "  Viewer should be ~${screen.distanceM}m from screen wall inside model")
+    } else {
+      // Procedural box environment — flat-colored walls, floor, and ceiling
+      spawnProceduralEnvironment(a, envPos, screen, room)
+    }
+
+    // Armrests: always SDK entities (viewer-relative positioning)
+    val c = TheaterEnvironment.colors
+    val armrestBox = Box(
+        Vector3(-ViewerLayout.ARMREST_WIDTH / 2f, -ViewerLayout.ARMREST_HEIGHT / 2f, -ViewerLayout.ARMREST_LENGTH / 2f),
+        Vector3(ViewerLayout.ARMREST_WIDTH / 2f, ViewerLayout.ARMREST_HEIGHT / 2f, ViewerLayout.ARMREST_LENGTH / 2f),
+    )
+    armrestEntities = listOf(
+        createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = true)),
+        createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = false)),
+    )
+  }
+
+  private fun spawnProceduralEnvironment(a: Anchor, envPos: Vector3, screen: ScreenConfig, room: RoomGeometry) {
     // Floor: dark charcoal ground plane centered on the user
     val floorHalfW = room.widthBack / 2f
     val floorHalfD = room.depth / 2f
@@ -353,7 +391,6 @@ class JellyQuestActivity : AppSystemActivity() {
 
     // Walls and ceiling
     val wallLength = TheaterLayout.wallLength(screen, room)
-    val halfH = room.ceilingHeight / 2f
     val t = TheaterEnvironment.WALL_THICKNESS
 
     // Screen wall splits around the screen opening — left flank, right flank, and top strip
@@ -412,16 +449,6 @@ class JellyQuestActivity : AppSystemActivity() {
             c.ceiling,
             TheaterLayout.ceilingPose(a, screen, room),
         ),
-    )
-
-    // Armrests
-    val armrestBox = Box(
-        Vector3(-ViewerLayout.ARMREST_WIDTH / 2f, -ViewerLayout.ARMREST_HEIGHT / 2f, -ViewerLayout.ARMREST_LENGTH / 2f),
-        Vector3(ViewerLayout.ARMREST_WIDTH / 2f, ViewerLayout.ARMREST_HEIGHT / 2f, ViewerLayout.ARMREST_LENGTH / 2f),
-    )
-    armrestEntities = listOf(
-        createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = true)),
-        createBoxEntity(armrestBox, c.armrest, ViewerLayout.armrestPose(a, theaterState.value.riserHeightM, isLeft = false)),
     )
   }
 

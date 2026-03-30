@@ -17,12 +17,16 @@ data class ScreenConfig(
     val screenCenterY: Float get() = screenBottomM + (heightM / 2f)
 }
 
-/** Default screen: PLF middle seat. */
+/** Default theater preset and seat, used at startup before user selects. */
+private val DEFAULT_EXPERIENCE = THEATER_EXPERIENCES.first { it.name == "Multiplex" }
+private val DEFAULT_SEAT = DEFAULT_EXPERIENCE.seats.first { it.label == "Middle" }
+
 val DEFAULT_SCREEN = ScreenConfig(
-    label = "Premium Large Format",
-    widthM = 16.0f,
-    heightM = 6.69f,
-    distanceM = 22.0f,
+    label = DEFAULT_EXPERIENCE.name,
+    widthM = DEFAULT_EXPERIENCE.screenWidthM,
+    heightM = DEFAULT_EXPERIENCE.screenHeightM,
+    distanceM = DEFAULT_SEAT.distanceM,
+    screenBottomM = DEFAULT_EXPERIENCE.screenBottomM,
 )
 
 /**
@@ -31,6 +35,6 @@ val DEFAULT_SCREEN = ScreenConfig(
  */
 data class TheaterState(
     val screen: ScreenConfig = DEFAULT_SCREEN,
-    val riserHeightM: Float = 0f,
-    val room: RoomGeometry = TheaterEnvironment.computeRoom(THEATER_EXPERIENCES[2]),
+    val riserHeightM: Float = DEFAULT_SEAT.riserHeightM,
+    val room: RoomGeometry = TheaterEnvironment.computeRoom(DEFAULT_EXPERIENCE),
 )

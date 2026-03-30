@@ -8,7 +8,10 @@ data class TheaterExperience(
     val screenBottomM: Float = STAGE_HEIGHT,
     val ceilingHeightM: Float,
     val seats: List<SeatPosition>,
-)
+    val environmentAsset: String? = null,
+) {
+    val hasGlbEnvironment: Boolean get() = environmentAsset != null
+}
 
 data class SeatPosition(
     val label: String,
@@ -38,10 +41,11 @@ val THEATER_EXPERIENCES = listOf(
         screenHeightM = 5.0f,
         ceilingHeightM = 10.0f,
         seats = listOf(
-            SeatPosition("Front", 11.42f, riserHeightM = 0.0f),
-            SeatPosition("Middle", 14.63f, riserHeightM = 0.68f),
-            SeatPosition("Back", 18.91f, riserHeightM = 1.60f),
+            SeatPosition("Front", 11.42f, riserHeightM = 1.60f),
+            SeatPosition("Middle", 14.63f, riserHeightM = 2.08f),
+            SeatPosition("Back", 18.91f, riserHeightM = 2.71f),
         ),
+        environmentAsset = "cinema_multiplex.glb",
     ),
     TheaterExperience(
         name = "Premium Large Format",
