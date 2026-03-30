@@ -66,6 +66,22 @@ object TheaterLayout {
         return Pose(position, anchor.rotation)
     }
 
+    /**
+     * GLB environment model origin — at the screen wall surface, floor level.
+     * Offset behind the video panel so mesh geometry doesn't z-fight
+     * with the compositor layer. Lateral offset centers the viewer in a seat
+     * rather than the aisle.
+     */
+    private const val GLB_SCREEN_WALL_OFFSET = 0.2f
+    private const val GLB_LATERAL_OFFSET = 0.945f  // Seats_All translation (1.095) - fine-tune (0.15)
+
+    fun glbEnvironmentPose(anchor: Anchor, screen: ScreenConfig): Pose {
+        val xz = anchor.position +
+            anchor.forward * (screen.distanceM + GLB_SCREEN_WALL_OFFSET) -
+            anchor.right * GLB_LATERAL_OFFSET
+        return Pose(Vector3(xz.x, 0f, xz.z), anchor.rotation)
+    }
+
     /** Wall length from screen wall to back wall. */
     fun wallLength(screen: ScreenConfig, room: RoomGeometry): Float {
         return screen.distanceM + room.backDistance

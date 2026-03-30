@@ -1,6 +1,10 @@
 package com.quest.jellyquest
 
+import com.meta.spatial.core.Quaternion
+import com.meta.spatial.core.Vector3
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -132,10 +136,84 @@ class TheaterEnvironmentTest {
 
     // --- Screen frame ---
 
+    // --- GLB environment positioning ---
+
+    @Test
+    fun `glb environment pose Y is at floor level`() {
+        val anchor = Anchor(
+            position = Vector3(5f, 0f, 3f),
+            forward = Vector3(0f, 0f, 1f),
+            rotation = Quaternion(0f, 0f, 0f),
+        )
+        val screen = ScreenConfig(label = "Multiplex", widthM = 12f, heightM = 5f, distanceM = 14.63f)
+
+        val pose = TheaterLayout.glbEnvironmentPose(anchor, screen)
+        assertEquals(0f, pose.t.y, 0.01f)
+    }
+
+    @Test
+    fun `glb environment pose uses anchor rotation`() {
+        val rotation = Quaternion(0f, 45f, 0f)
+        val anchor = Anchor(
+            position = Vector3(0f, 0f, 0f),
+            forward = Vector3(0.707f, 0f, 0.707f),
+            rotation = rotation,
+        )
+        val screen = ScreenConfig(label = "Multiplex", widthM = 12f, heightM = 5f, distanceM = 14.63f)
+
+        val pose = TheaterLayout.glbEnvironmentPose(anchor, screen)
+        assertEquals(rotation, pose.q)
+    }
+
     @Test
     fun `screen frame returns 4 boxes`() {
         val boxes = TheaterEnvironment.screenFrameBoxes(14.0f, 5.86f)
         assertEquals(4, boxes.size)
+    }
+
+    // --- GLB environment asset ---
+
+    @Test
+    fun `multiplex has environment asset`() {
+        val multiplex = THEATER_EXPERIENCES.first { it.name == "Multiplex" }
+        assertEquals("cinema_multiplex.glb", multiplex.environmentAsset)
+    }
+
+    @Test
+    fun `non-multiplex presets have null environment asset`() {
+        THEATER_EXPERIENCES.filter { it.name != "Multiplex" }.forEach { exp ->
+            assertNull("${exp.name} should not have environmentAsset", exp.environmentAsset)
+        }
+    }
+
+    @Test
+    fun `hasGlbEnvironment returns true only for multiplex`() {
+        THEATER_EXPERIENCES.forEach { exp ->
+            val expected = exp.name == "Multiplex"
+            assertEquals("${exp.name}: hasGlbEnvironment", expected, exp.hasGlbEnvironment)
+        }
+    }
+
+    @Test
+    fun `theater state screen label matches experience name for preset lookup`() {
+        THEATER_EXPERIENCES.forEach { exp ->
+            exp.seats.forEach { seat ->
+                val state = TheaterState(
+                    screen = ScreenConfig(
+                        label = exp.name,
+                        widthM = exp.screenWidthM,
+                        heightM = exp.screenHeightM,
+                        distanceM = seat.distanceM,
+                        screenBottomM = exp.screenBottomM,
+                    ),
+                    riserHeightM = seat.riserHeightM,
+                    room = TheaterEnvironment.computeRoom(exp),
+                )
+                val found = THEATER_EXPERIENCES.firstOrNull { it.name == state.screen.label }
+                assertNotNull("Should find experience for ${exp.name}", found)
+                assertEquals(exp.environmentAsset, found!!.environmentAsset)
+            }
+        }
     }
 
     @Test
