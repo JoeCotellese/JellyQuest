@@ -1,0 +1,10 @@
+entities:
+  com.meta.models.Scene:
+    - components:
+        com.meta.components.Name:
+          {}
+        com.meta.components.Scene:
+          {}
+      tag: Scene
+metadata:
+  version: 1.35

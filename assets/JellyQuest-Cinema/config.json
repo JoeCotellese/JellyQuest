@@ -1,0 +1,7 @@
+{
+    "spatial.editor.customComponentXmlsPath": [
+        "../src/main/components/"
+    ],
+    "spatial.editor.libraryComponentXmlsPath": "../build/generated/components",
+    "spatial.editor.useExtendedXmlsWhenBuiltInXmlsAreUsed": true
+}

@@ -191,7 +191,7 @@ class JellyQuestActivity : AppSystemActivity() {
     scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
 
     scene.setLightingEnvironment(
-        ambientColor = Vector3(3.0f),
+        ambientColor = Vector3(8.0f),
         sunColor = Vector3(0.0f, 0.0f, 0.0f),
         sunDirection = -Vector3(1.0f, 3.0f, -2.0f),
         environmentIntensity = 0.0f,
