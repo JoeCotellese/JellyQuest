@@ -29,7 +29,7 @@ TEXTURE_DIR = os.path.join(BLEND_DIR, "..", "app", "src", "main", "assets")
 # Tuple: (material_name, [object_names], optional_texture_filename)
 BAKE_LIST = [
     ("ArtDeco_Ceiling", ["Ceiling"], None),
-    ("ArtDeco_Floor", ["Floor", "RakedFloor"], "texture_floor_carpet.png"),
+    ("ArtDeco_Floor", ["RakedFloor"], "texture_floor_carpet.png"),
     ("ArtDeco_Gold", ["GoldTrim_All"], None),
     ("ArtDeco_Seat", ["Seats_All"], None),
     ("ArtDeco_SeatMetal", ["Armrests_All"], None),
