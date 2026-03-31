@@ -101,26 +101,20 @@ def restore_lights(original_energies):
 # ── Step 2: Disable non-house lights ───────────────────────────────
 
 def configure_house_lights():
-    """Disable screen/projection lights — keep house lights as-is."""
-    log("Configuring house lights...")
+    """Enable only sconce lights — disable everything else."""
+    log("Configuring lights (sconces only)...")
 
-    if "ScreenGlow" in bpy.data.objects:
-        sg = bpy.data.objects["ScreenGlow"]
-        sg.hide_render = True
-        sg.hide_viewport = True
-        log("  ScreenGlow: hidden")
-
-    if "ProjectionBooth_Light" in bpy.data.objects:
-        booth = bpy.data.objects["ProjectionBooth_Light"]
-        light_data = booth.data
-        bpy.data.objects.remove(booth, do_unlink=True)
-        bpy.data.lights.remove(light_data)
-        log("  ProjectionBooth_Light: removed")
-
-    # Log active lights
     for obj in bpy.data.objects:
-        if obj.type == "LIGHT" and not obj.hide_render:
-            log(f"  Active: {obj.name} ({obj.data.energy:.0f}W)")
+        if obj.type != "LIGHT":
+            continue
+        if obj.name.startswith("Sconce_Light_"):
+            obj.hide_render = False
+            obj.hide_viewport = False
+            log(f"  ENABLED: {obj.name} ({obj.data.energy:.0f}W)")
+        else:
+            obj.hide_render = True
+            obj.hide_viewport = True
+            log(f"  DISABLED: {obj.name}")
 
 
 # ── Step 3: Wire surface textures ──────────────────────────────────
@@ -180,10 +174,11 @@ def remove_bake_texture_nodes(mat):
 
 
 def restore_material_for_export(mat):
-    """Swap Principled BSDF for Emission shader so glTF exports as unlit.
+    """Replace Principled BSDF with Emission node for KHR_materials_unlit export.
 
-    Blender's glTF exporter emits KHR_materials_unlit when it sees an
-    Emission shader connected directly to Material Output.
+    The glTF exporter only flags KHR_materials_unlit when there is NO
+    Principled BSDF node in the tree — even a disconnected one blocks it.
+    We delete the BSDF entirely and wire: BakeTarget → Emission → Output.
     """
     tree = mat.node_tree
     output = tree.nodes["Material Output"]
@@ -192,10 +187,10 @@ def restore_material_for_export(mat):
     # Remove any bake-time texture nodes
     remove_bake_texture_nodes(mat)
 
-    # Remove Principled BSDF link to output
-    for link in list(tree.links):
-        if link.to_node == output and link.to_socket.name == "Surface":
-            tree.links.remove(link)
+    # Delete the Principled BSDF — its presence blocks KHR_materials_unlit
+    bsdf = tree.nodes.get("Principled BSDF")
+    if bsdf:
+        tree.nodes.remove(bsdf)
 
     # Create Emission shader: BakeTarget → Emission → Material Output
     emission = tree.nodes.new("ShaderNodeEmission")
