@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -84,8 +85,11 @@ class JellyfinClient(private val context: Context) {
         private const val KEY_ACCESS_TOKEN = "access_token"
         private const val KEY_USER_ID = "user_id"
 
-        // Hardcoded for development; will be replaced by local discovery
+        // Fallback only — used when local network discovery finds no server.
         const val DEFAULT_SERVER_URL = "http://192.168.1.9:8096"
+
+        // Local server discovery (SDK UDP broadcast, port 7359) timeout.
+        private const val DISCOVERY_TIMEOUT_MS = 3_000
 
         private const val QUICK_CONNECT_POLL_MS = 5_000L
         private const val KEY_CACHED_LIBRARIES = "cached_libraries"
@@ -114,6 +118,11 @@ class JellyfinClient(private val context: Context) {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    // Active/discovered Jellyfin server URL, surfaced to the UI. Null until a
+    // saved session is restored or local discovery finds a server.
+    private val _serverUrl = MutableStateFlow<String?>(null)
+    val serverUrl: StateFlow<String?> = _serverUrl.asStateFlow()
+
     private val _cachedLibraries = MutableStateFlow<List<JellyfinItem>?>(null)
     val cachedLibraries: StateFlow<List<JellyfinItem>?> = _cachedLibraries.asStateFlow()
 
@@ -127,6 +136,7 @@ class JellyfinClient(private val context: Context) {
         val savedUserId = prefs.getString(KEY_USER_ID, null)
         if (savedUrl != null && savedToken != null && savedUserId != null) {
             baseUrl = savedUrl
+            _serverUrl.value = savedUrl
             accessToken = savedToken
             userId = UUID.fromString(savedUserId)
             api = jellyfin.createApi(baseUrl = savedUrl, accessToken = savedToken)
@@ -139,17 +149,56 @@ class JellyfinClient(private val context: Context) {
     }
 
     /**
+     * Scan the local network for a Jellyfin server and remember the first one
+     * found, so the UI can display it before the user connects. Safe to call
+     * repeatedly (e.g. when the connect prompt appears). Keeps any previously
+     * known URL if this scan finds nothing.
+     */
+    suspend fun discoverServer() {
+        _serverUrl.value = discoverServerUrl() ?: _serverUrl.value
+    }
+
+    /**
+     * Discover a Jellyfin server on the local network via the SDK's UDP
+     * broadcast (LocalServerDiscovery.DISCOVERY_PORT, 7359). Returns the first
+     * responding server's address, or null if none answer within [timeoutMs].
+     */
+    suspend fun discoverServerUrl(timeoutMs: Int = DISCOVERY_TIMEOUT_MS): String? =
+        withContext(Dispatchers.IO) {
+            try {
+                val server = jellyfin.discovery.discoverLocalServers(timeoutMs, 1).firstOrNull()
+                if (server != null) {
+                    Log.i(TAG, "Discovered Jellyfin server: ${server.name} @ ${server.address}")
+                } else {
+                    Log.w(TAG, "No Jellyfin server found on the local network")
+                }
+                server?.address
+            } catch (e: Exception) {
+                Log.w(TAG, "Local server discovery failed", e)
+                null
+            }
+        }
+
+    /**
      * Initiate Quick Connect authentication.
      * Displays a code for the user to enter at their Jellyfin server's Quick Connect page,
      * then polls until authorized.
+     *
+     * When [serverUrl] is null, resolves the server from a prior discovery, then
+     * scans the local network, falling back to [DEFAULT_SERVER_URL] only if
+     * nothing is found.
      */
-    suspend fun startQuickConnect(serverUrl: String = DEFAULT_SERVER_URL) {
+    suspend fun startQuickConnect(serverUrl: String? = null) {
         _authState.value = AuthState.QUICK_CONNECT_PENDING
         _errorMessage.value = null
         _quickConnectCode.value = null
 
+        // Resolve the server: explicit arg > already-discovered > discover now > fallback.
+        val url = serverUrl ?: _serverUrl.value ?: discoverServerUrl() ?: DEFAULT_SERVER_URL
+        _serverUrl.value = url
+
         try {
-            val client = jellyfin.createApi(baseUrl = serverUrl)
+            val client = jellyfin.createApi(baseUrl = url)
 
             // Check if Quick Connect is enabled
             val enabledResponse = withContext(Dispatchers.IO) {
@@ -187,20 +236,20 @@ class JellyfinClient(private val context: Context) {
 
             client.update(accessToken = authResult.accessToken)
             api = client
-            baseUrl = serverUrl
+            baseUrl = url
             accessToken = authResult.accessToken
             userId = authResult.user?.id
             _quickConnectCode.value = null
 
             // Persist for next launch
             prefs.edit()
-                .putString(KEY_BASE_URL, serverUrl)
+                .putString(KEY_BASE_URL, url)
                 .putString(KEY_ACCESS_TOKEN, authResult.accessToken)
                 .putString(KEY_USER_ID, authResult.user?.id.toString())
                 .apply()
 
             _authState.value = AuthState.AUTHENTICATED
-            Log.i(TAG, "Quick Connect authenticated: ${authResult.user?.name} @ $serverUrl")
+            Log.i(TAG, "Quick Connect authenticated: ${authResult.user?.name} @ $url")
             prefetchLibraryContent()
         } catch (e: Exception) {
             Log.e(TAG, "Quick Connect failed", e)
