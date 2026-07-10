@@ -1,0 +1,10 @@
+# Configuration for the /learnings skill.
+# See ~/.claude/skills/learnings/SKILL.md
+
+enabled = true
+
+# Max entries kept in the Active section before /learnings review warns.
+max_active = 100
+
+# Entries older than this (days) get moved to Archived on /learnings review.
+archive_after_days = 90

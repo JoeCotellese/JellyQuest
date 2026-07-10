@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "_comment": "Versioned theater lighting presets. Energies are absolute Watts per light GROUP (see group_prefixes in lighting_presets.py for the name->group mapping). baseline_reference records the blend's authored energies so multiplier-derived presets are traceable. Applied identically by preview_render.py and bake_lightmaps.py.",
+  "baseline_reference": {
+    "sconces": 90,
+    "cove": 9,
+    "ambient_fill": 5,
+    "exit_glow": 4,
+    "screen_glow": 55
+  },
+  "presets": {
+    "movie_mode": {
+      "description": "Dark theater with the movie screen dominant. Derived 2026-07-10 as house 0.15x, screen 1.5x of baseline.",
+      "sconces": 13.5,
+      "cove": 1.35,
+      "ambient_fill": 0.75,
+      "exit_glow": 0.6,
+      "screen_glow": 82.5
+    }
+  }
+}

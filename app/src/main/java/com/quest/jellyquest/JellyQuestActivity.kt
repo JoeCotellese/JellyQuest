@@ -30,6 +30,7 @@ import com.meta.spatial.runtime.ButtonBits
 import com.meta.spatial.toolkit.AppSystemActivity
 import com.meta.spatial.toolkit.DpPerMeterDisplayOptions
 import com.meta.spatial.toolkit.Material
+import com.meta.spatial.runtime.SceneMaterial
 import com.meta.spatial.toolkit.MediaPanelRenderOptions
 import com.meta.spatial.toolkit.MediaPanelSettings
 import com.meta.spatial.toolkit.Mesh
@@ -191,7 +192,7 @@ class JellyQuestActivity : AppSystemActivity() {
     scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
 
     scene.setLightingEnvironment(
-        ambientColor = Vector3(3.0f),
+        ambientColor = Vector3(8.0f),
         sunColor = Vector3(0.0f, 0.0f, 0.0f),
         sunDirection = -Vector3(1.0f, 3.0f, -2.0f),
         environmentIntensity = 0.0f,
@@ -351,7 +352,11 @@ class JellyQuestActivity : AppSystemActivity() {
       // GLB environment — baked 3D model replaces procedural walls, floor, and ceiling
       val glbPose = TheaterLayout.glbEnvironmentPose(a, screen)
       environmentModelEntity = Entity.create(listOf(
-          Mesh(asset.toUri(), hittable = MeshCollision.NoCollision),
+          Mesh(
+              mesh = asset.toUri(),
+              hittable = MeshCollision.NoCollision,
+              defaultShaderOverride = SceneMaterial.UNLIT_SHADER,
+          ),
           Transform(Pose(glbPose.t, glbPose.q)),
       ))
       Log.i(TAG, "GLB environment loaded: $asset pos=${glbPose.t} rot=${glbPose.q}")

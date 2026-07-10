@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext HTTP for local network Jellyfin servers -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.1.9</domain>
-    </domain-config>
+    <!--
+      Jellyfin servers are discovered on the local network at runtime and are
+      typically served over plain HTTP on arbitrary private IPs, so we can't pin
+      a single host (Android's network-security-config has no CIDR/range form).
+      Permit cleartext so Quick Connect and ExoPlayer streaming reach the
+      discovered LAN server over HTTP.
+    -->
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

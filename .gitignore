@@ -8,3 +8,19 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Diagnostic screenshots from Quest
+assets/jellyquest_*.png
+assets/sconce_test*.png
+assets/bake_test*.png
+assets/floor_fix*.png
+assets/unlit_*.png
+assets/walls_unlit*.png
+
+# Blender temp files
+assets/*.blend1
+assets/cinema_multiplex_boosted.glb
+
+# Tooling
+.serena/
+__pycache__/

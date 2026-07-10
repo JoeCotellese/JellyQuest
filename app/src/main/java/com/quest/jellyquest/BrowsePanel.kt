@@ -62,6 +62,7 @@ fun BrowsePanel(
 ) {
     val authState by jellyfinClient.authState.collectAsState()
     val errorMessage by jellyfinClient.errorMessage.collectAsState()
+    val serverUrl by jellyfinClient.serverUrl.collectAsState()
     // Scope at this level survives child composable transitions (prompt -> waiting -> browser)
     val scope = rememberCoroutineScope()
     var activeTab by remember { mutableStateOf(BrowseTab.BROWSE) }
@@ -102,7 +103,10 @@ fun BrowsePanel(
                 BrowseTab.BROWSE -> {
                     when (authState) {
                         AuthState.DISCONNECTED, AuthState.ERROR -> {
+                            // Scan the local network for a Jellyfin server when the prompt appears.
+                            LaunchedEffect(Unit) { jellyfinClient.discoverServer() }
                             QuickConnectPrompt(
+                                serverUrl = serverUrl,
                                 onConnect = {
                                     scope.launch { jellyfinClient.startQuickConnect() }
                                 },
@@ -137,6 +141,7 @@ fun BrowsePanel(
 
 @Composable
 private fun QuickConnectPrompt(
+    serverUrl: String?,
     onConnect: () -> Unit,
     errorMessage: String?,
 ) {
@@ -155,7 +160,7 @@ private fun QuickConnectPrompt(
         Spacer(modifier = Modifier.size(8.dp))
 
         Text(
-            text = JellyfinClient.DEFAULT_SERVER_URL,
+            text = serverUrl ?: "Searching for server…",
             style = SpatialTheme.typography.body2.copy(
                 color = SpatialTheme.colorScheme.secondaryAlphaBackground,
             ),
