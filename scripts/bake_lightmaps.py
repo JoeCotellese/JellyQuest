@@ -6,20 +6,30 @@ Run from terminal:
         assets/cinema_standard_multiplex.blend \
         --background --python scripts/bake_lightmaps.py
 
-    With boost (e.g. 1.5x brighter than Blender):
+    With a versioned lighting preset (see lighting_presets.json):
     /Applications/Blender.app/Contents/MacOS/Blender \
         assets/cinema_standard_multiplex.blend \
-        --background --python scripts/bake_lightmaps.py -- --boost 1.5
+        --background --python scripts/bake_lightmaps.py -- --preset movie_mode
+
+    Fast validation without the ~24-min bake — re-export the existing
+    assets/lightmaps/*.png through the fixed export path:
+    /Applications/Blender.app/Contents/MacOS/Blender \
+        assets/cinema_standard_multiplex.blend \
+        --background --python scripts/bake_lightmaps.py -- --no-bake
+
+Args (after "--"):
+    --preset NAME   Apply a named lighting preset before baking
+    --boost F       Multiply all light energies by F (composes with --preset)
+    --no-bake       Skip baking; load saved lightmaps and run only the export
 
 Workflow:
-1. Reads light energies from the .blend file (your visual reference)
-2. Applies boost multiplier to all lights (default 1.0 = same as Blender)
-3. Wires surface textures into materials that have them
-4. For materials without textures, uses the BSDF default color
-5. Bakes COMBINED (color × lighting) into each lightmap
-6. Restores materials: BakeTarget → Base Color, marked as unlit
-7. Exports GLB with KHR_materials_unlit
-8. Restores light energies — does NOT save the .blend file
+1. Reads light energies from the .blend (or applies --preset), then --boost
+2. Wires surface textures into materials that have them (else BSDF default color)
+3. Bakes COMBINED (color × lighting) into each lightmap  [skipped with --no-bake]
+4. Restores materials: BakeTarget → Base Color (exports as baseColorTexture)
+5. Collapses each mesh to the lightmap UV so it becomes TEXCOORD_0
+6. Exports GLB (the app forces UNLIT_SHADER, so no KHR_materials_unlit needed)
+7. Restores light energies — does NOT save the .blend file
 """
 
 import bpy
@@ -27,6 +37,9 @@ import os
 import shutil
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lighting_presets as presets  # noqa: E402
 
 # --- Parse arguments after "--" separator ---
 argv = sys.argv
@@ -36,9 +49,18 @@ else:
     script_args = []
 
 BAKE_BOOST = 1.0
+PRESET = None
+NO_BAKE = False
+FAST = False
 for i, arg in enumerate(script_args):
     if arg == "--boost" and i + 1 < len(script_args):
         BAKE_BOOST = float(script_args[i + 1])
+    elif arg == "--preset" and i + 1 < len(script_args):
+        PRESET = script_args[i + 1]
+    elif arg == "--no-bake":
+        NO_BAKE = True
+    elif arg == "--fast":
+        FAST = True
 
 # --- Paths ---
 BLEND_DIR = os.path.dirname(bpy.data.filepath)
@@ -47,7 +69,9 @@ GLB_OUTPUT = os.path.join(BLEND_DIR, "cinema_multiplex.glb")
 APP_ASSETS = os.path.join(BLEND_DIR, "..", "app", "src", "main", "assets", "cinema_multiplex.glb")
 TEXTURE_DIR = BLEND_DIR  # textures live alongside the .blend file
 
-BAKE_SAMPLES = 128
+# --fast trades quality for speed: noisier lightmaps for a quick on-device
+# look-check. Use the default for the final bake.
+BAKE_SAMPLES = 16 if FAST else 128
 
 # Materials → objects → optional texture file
 # Textures are tiled via a Mapping node during bake, then removed
@@ -67,6 +91,10 @@ BAKE_LIST = [
 
 # Tiling scale for surface textures (set in Blender, matched here)
 TEXTURE_TILE_SCALE = 16.0
+
+# UV layer holding the lightmap atlas unwrap. The bake writes the atlas here;
+# at export it must become TEXCOORD_0 (see collapse_to_lightmap_uv).
+LIGHTMAP_UV = "Lightmap"
 
 
 def log(msg):
@@ -101,20 +129,16 @@ def restore_lights(original_energies):
 # ── Step 2: Disable non-house lights ───────────────────────────────
 
 def configure_house_lights():
-    """Enable only sconce lights — disable everything else."""
-    log("Configuring lights (sconces only)...")
+    """Enable all lights — sconces plus house lights (AmbientFill, CoveLight,
+    ScreenGlow, exit-sign glows) — so the room reads lit in the bake."""
+    log("Configuring lights (all house + sconce lights enabled)...")
 
     for obj in bpy.data.objects:
         if obj.type != "LIGHT":
             continue
-        if obj.name.startswith("Sconce_Light_"):
-            obj.hide_render = False
-            obj.hide_viewport = False
-            log(f"  ENABLED: {obj.name} ({obj.data.energy:.0f}W)")
-        else:
-            obj.hide_render = True
-            obj.hide_viewport = True
-            log(f"  DISABLED: {obj.name}")
+        obj.hide_render = False
+        obj.hide_viewport = False
+        log(f"  ENABLED: {obj.name} ({obj.data.energy:.0f}W)")
 
 
 # ── Step 3: Wire surface textures ──────────────────────────────────
@@ -174,32 +198,44 @@ def remove_bake_texture_nodes(mat):
 
 
 def restore_material_for_export(mat):
-    """Replace Principled BSDF with Emission node for KHR_materials_unlit export.
+    """Wire the baked lightmap into Base Color so it exports as baseColorTexture.
 
-    The glTF exporter only flags KHR_materials_unlit when there is NO
-    Principled BSDF node in the tree — even a disconnected one blocks it.
-    We delete the BSDF entirely and wire: BakeTarget → Emission → Output.
+    The app renders the GLB with UNLIT_SHADER (defaultShaderOverride), which
+    samples baseColorTexture on UV0 and ignores lighting, baseColorFactor, and
+    the per-texture texCoord field. So the baked result (BakeTarget) MUST land in
+    the Principled BSDF Base Color. The old path wired BakeTarget → Emission,
+    which exports as emissiveTexture with a black base color — the unlit shader
+    then renders black. KHR_materials_unlit is unnecessary; the shader override
+    forces the unlit path regardless, so a plain matte BSDF is correct here.
     """
     tree = mat.node_tree
     output = tree.nodes["Material Output"]
     bake_node = tree.nodes["BakeTarget"]
+    bsdf = tree.nodes["Principled BSDF"]
 
-    # Remove any bake-time texture nodes
+    # Remove any bake-time surface texture nodes (tiled wall/floor helpers)
     remove_bake_texture_nodes(mat)
 
-    # Delete the Principled BSDF — its presence blocks KHR_materials_unlit
-    bsdf = tree.nodes.get("Principled BSDF")
-    if bsdf:
-        tree.nodes.remove(bsdf)
+    # BakeTarget → Base Color, replacing whatever was wired for baking
+    base_in = bsdf.inputs["Base Color"]
+    for link in list(base_in.links):
+        tree.links.remove(link)
+    tree.links.new(bake_node.outputs["Color"], base_in)
 
-    # Create Emission shader: BakeTarget → Emission → Material Output
-    emission = tree.nodes.new("ShaderNodeEmission")
-    emission.name = "UnlitExport"
-    emission.location = (0, 300)
-    emission.inputs["Strength"].default_value = 1.0
+    # Matte, non-metallic, no emission (unlit shader ignores these; keep sane)
+    bsdf.inputs["Metallic"].default_value = 0.0
+    bsdf.inputs["Roughness"].default_value = 1.0
+    if "Emission Strength" in bsdf.inputs:
+        bsdf.inputs["Emission Strength"].default_value = 0.0
+    if "Emission Color" in bsdf.inputs:
+        bsdf.inputs["Emission Color"].default_value = (0.0, 0.0, 0.0, 1.0)
 
-    tree.links.new(bake_node.outputs["Color"], emission.inputs["Color"])
-    tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
+    # Ensure the BSDF drives the surface output
+    surf = output.inputs["Surface"]
+    if not surf.links or surf.links[0].from_node is not bsdf:
+        for link in list(surf.links):
+            tree.links.remove(link)
+        tree.links.new(bsdf.outputs["BSDF"], surf)
 
 
 # ── Step 4: Bake ──────────────────────────────────────────────────
@@ -239,8 +275,47 @@ def bake_material(mat_name, obj_names, texture_filename=None):
     # Bake
     bpy.ops.object.bake(type="COMBINED")
 
-    # Restore material for export
-    restore_material_for_export(mat)
+    # Persist this lightmap NOW, before any later material bakes. A later bake can
+    # corrupt an earlier in-memory lightmap image (observed: baking ExitDoor_Metal
+    # overwrites Lightmap_ArtDeco_Wall's pixels even though they are separate
+    # datablocks). Saving immediately keeps each PNG correct; export reloads from
+    # these PNGs (load_existing_lightmaps), so the corruption never reaches the GLB.
+    os.makedirs(LIGHTMAP_DIR, exist_ok=True)
+    img = bake_node.image
+    img.filepath_raw = os.path.join(LIGHTMAP_DIR, f"{img.name}.png")
+    img.file_format = "PNG"
+    img.save()
+
+    # Do NOT restore here — restoring swaps this surface's albedo to its baked
+    # (bright) lightmap, inflating inter-reflection for later bakes. Restore all
+    # at the end (via load_existing_lightmaps, which also reloads clean PNGs).
+
+
+def restore_all_materials_for_export():
+    """Wire every baked material's lightmap into Base Color for export. Run once
+    after ALL bakes complete, so inter-reflection stays physical during baking."""
+    for mat_name, _obj_names, _tex_file in BAKE_LIST:
+        restore_material_for_export(bpy.data.materials[mat_name])
+
+
+def load_existing_lightmaps():
+    """--no-bake: load the saved lightmap PNGs into the BakeTarget images and
+    restore materials for export, skipping the ~24-min bake. Bake and export are
+    independent stages, so this validates the export path in ~1 min against the
+    lightmaps already on disk (assets/lightmaps/*.png)."""
+    for mat_name, _obj_names, _tex_file in BAKE_LIST:
+        mat = bpy.data.materials[mat_name]
+        bake_node = mat.node_tree.nodes["BakeTarget"]
+        img = bake_node.image
+        png = os.path.join(LIGHTMAP_DIR, f"{img.name}.png")
+        if not os.path.exists(png):
+            log(f"  MISSING {png} — skipping {mat_name}")
+            continue
+        img.filepath = png
+        img.source = "FILE"
+        img.reload()
+        log(f"  Loaded {img.name}.png")
+        restore_material_for_export(mat)
 
 
 def bake_all_lightmaps():
@@ -259,23 +334,47 @@ def bake_all_lightmaps():
         except Exception as e:
             log(f"  [{i}/{total}] {label} FAILED: {e}")
             sys.exit(1)
-
-    # Save all lightmap images
-    log("Saving lightmap PNGs...")
-    for img in bpy.data.images:
-        if img.name.startswith("Lightmap_"):
-            filepath = os.path.join(LIGHTMAP_DIR, f"{img.name}.png")
-            img.filepath_raw = filepath
-            img.file_format = "PNG"
-            img.save()
-            log(f"  Saved {img.name}.png")
+    # Note: each lightmap is saved inside bake_material() right after its bake,
+    # NOT here — an end-of-loop save would persist images already corrupted by
+    # later bakes. See the note in bake_material().
 
 
 # ── Step 5: Export GLB with unlit materials ────────────────────────
 
+def collapse_to_lightmap_uv():
+    """Make the lightmap unwrap the sole UV set (TEXCOORD_0) on every baked mesh.
+
+    Meta's UNLIT_SHADER always samples the material texture on UV0 and ignores
+    the glTF texCoord field. The atlas is unwrapped into the 'Lightmap' UV layer,
+    but in the .blend that sits at index 1 while the tiling 'UVMap' is index 0
+    and flagged active_render. Left alone, the exporter binds the lightmap to
+    TEXCOORD_0 = tiling UV, so the runtime samples the atlas with tiling coords
+    and renders the black atlas background. The surface textures are already
+    baked into the atlas, so the tiling UV is dead weight at runtime — drop it,
+    leaving the lightmap unwrap as the only UV set (TEXCOORD_0).
+    """
+    log("Collapsing baked meshes to lightmap UV (TEXCOORD_0)...")
+    processed = set()
+    for obj in bpy.data.objects:
+        if obj.type != "MESH" or obj.data.name in processed:
+            continue
+        uvs = obj.data.uv_layers
+        if LIGHTMAP_UV not in uvs:
+            continue
+        processed.add(obj.data.name)
+        for uv in list(uvs):
+            if uv.name != LIGHTMAP_UV:
+                uvs.remove(uv)
+        uvs[LIGHTMAP_UV].active = True
+        uvs[LIGHTMAP_UV].active_render = True
+        log(f"  {obj.data.name}: single UV '{LIGHTMAP_UV}' → TEXCOORD_0")
+
+
 def export_glb():
     """Export GLB with KHR_materials_unlit, without the Screen mesh."""
     log("Exporting GLB (unlit)...")
+
+    collapse_to_lightmap_uv()
 
     # Hide Screen mesh
     screen = bpy.data.objects.get("Screen")
@@ -326,16 +425,34 @@ def export_glb():
 
 def main():
     log("=" * 60)
-    log(f"Lightmap Bake: Color × Light (boost={BAKE_BOOST}x)")
+    mode = "export-only (--no-bake)" if NO_BAKE else "bake + export"
+    log(f"Lightmap {mode}: preset={PRESET or '(blend values)'} boost={BAKE_BOOST}x")
     log("=" * 60)
     start_total = time.time()
 
-    original_energies = boost_lights()
-    configure_house_lights()
-    configure_bake_settings()
+    # Snapshot true light energies so we can restore (the .blend is never saved).
+    original_energies = {o.name: o.data.energy
+                         for o in bpy.data.objects if o.type == "LIGHT"}
 
-    log("Starting bake...")
-    bake_all_lightmaps()
+    # A preset SETS absolute energies; --boost then MULTIPLIES on top.
+    if PRESET:
+        presets.apply_preset(PRESET, log=log)
+    if BAKE_BOOST != 1.0:
+        boost_lights()
+    configure_house_lights()
+
+    if NO_BAKE:
+        log("Skipping bake — loading existing lightmaps for export...")
+        load_existing_lightmaps()
+    else:
+        configure_bake_settings()
+        log("Starting bake...")
+        bake_all_lightmaps()
+        # Reload the clean per-material PNGs into the BakeTarget images, undoing
+        # any in-memory corruption from cross-material bake writes, then restore
+        # materials for export. Export uses these reloaded images.
+        log("Reloading clean lightmaps for export...")
+        load_existing_lightmaps()
 
     restore_lights(original_energies)
     export_glb()

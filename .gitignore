@@ -20,3 +20,7 @@ assets/walls_unlit*.png
 # Blender temp files
 assets/*.blend1
 assets/cinema_multiplex_boosted.glb
+
+# Tooling
+.serena/
+__pycache__/
